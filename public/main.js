@@ -31,10 +31,5 @@ document.addEventListener('DOMContentLoaded', () => {
         buttonContainer.appendChild(button);
         soundboard.appendChild(buttonContainer);
       });
-
-      Sortable.create(soundboard, {
-        animation: 150,
-        handle: '.sound-button',
-      });
     });
 });
