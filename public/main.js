@@ -1,6 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
   const soundboard = document.getElementById('soundboard');
+  const loadingContainer = document.getElementById('loading-container');
+  const loadingBar = document.getElementById('loading-bar');
   let currentAudio;
+  let loadedCount = 0;
 
   fetch('/sounds')
     .then(response => response.json())
@@ -11,6 +14,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const audio = new Audio(sound.url);
         audio.onerror = () => {
           console.error(`Error loading audio file: ${sound.url}`);
+        };
+        audio.onloadeddata = () => {
+          loadedCount++;
+          const progress = (loadedCount / sounds.length) * 100;
+          loadingBar.style.width = `${progress}%`;
+          if (loadedCount === sounds.length) {
+            setTimeout(() => {
+              loadingContainer.style.display = 'none';
+            }, 500);
+          }
         };
         audioElements[sound.name] = audio;
 
