@@ -3,7 +3,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const soundboard = document.getElementById('soundboard');
   const loadingContainer = document.getElementById('loading-container');
   const loadingBar = document.getElementById('loading-bar');
-  const breadcrumb = document.getElementById('breadcrumb');
   let currentAudio;
   let loadedCount = 0;
   let currentPath = '';
@@ -60,7 +59,6 @@ document.addEventListener('DOMContentLoaded', () => {
           button.addEventListener('click', () => {
             if (sound.type === 'folder') {
               currentPath = sound.relativePath;
-              breadcrumb.textContent = currentPath;
               fetchSounds(currentPath);
             } else {
               if (currentAudio && !currentAudio.paused) {
@@ -77,14 +75,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       });
   }
-
-  breadcrumb.addEventListener('click', () => {
-    if (currentPath) {
-      currentPath = path.dirname(currentPath);
-      breadcrumb.textContent = currentPath;
-      fetchSounds(currentPath);
-    }
-  });
 
   fetchSounds(currentPath);
 });

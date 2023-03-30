@@ -1,10 +1,11 @@
 body {
   font-family: sans-serif;
+  font-size: 12;
 }
 
 #soundboard {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   gap: 10px;
 }
 
@@ -21,7 +22,7 @@ body {
   border: none;
   border-radius: 5px;
   color: white;
-  font-size: 1.1rem;
+  /* font-size: 1.1rem; */
   cursor: pointer;
   transition: background-color 0.2s ease;
 }
@@ -69,5 +70,6 @@ body {
 }
 
 h2 {
+  margin: 0;
   grid-column: 1 / -1;
 }
