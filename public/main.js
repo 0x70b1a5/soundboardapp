@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (parts.length > 1) {
             getOrCreateHeading(parts[0])
           }
-          button.textContent = parts.pop();
+          button.textContent = parts.pop().replace(/\.\w+$/,'');
           button.addEventListener('click', () => {
             if (sound.type === 'folder') {
               currentPath = sound.relativePath;
