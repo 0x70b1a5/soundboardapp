@@ -1,54 +1,33 @@
 #!/bin/bash
 
-#
-# WARNING: this script seems to make SHORT, QUIET SUONDS VERY LOUD FOR SOME REASON
-#
+function normalize_audio_file() {
+  TARGET_LOUDNESS=-16
+  TOLERANCE=0.5
 
-# Target loudness level in LUFS
-TARGET_LOUDNESS=-16
+  file="$1"
+  [ -e "$file" ] || { echo "File not found: $file"; return 1; }
 
-# Loudness tolerance in LUFS
-TOLERANCE=0.5
+  INPUT_LOUDNESS=$(ffmpeg -i "$file" -af "ebur128=framelog=verbose" -f null - 2>&1 | grep -oP 'I:\s*\K[-0-9.]+' )
 
-# Folder containing the audio files
-AUDIO_FOLDER="./public/soundboard"
+  if [[ "$INPUT_LOUDNESS" == "inf" ]] || [[ "$INPUT_LOUDNESS" == "-inf" ]]; then
+    echo "Skipping ${file##*/} (invalid loudness value: ${INPUT_LOUDNESS})"
+    return 1
+  fi
 
-function process_audio_files() {
-  local folder="$1"
+  LOUDNESS_DIFFERENCE=$(echo "sqrt(($TARGET_LOUDNESS - $INPUT_LOUDNESS) * ($TARGET_LOUDNESS - $INPUT_LOUDNESS))" | bc -l)
 
-  for file in "$folder"/*.{mp3,ogg}; do
-    [ -e "$file" ] || continue
-
-    # Get the input file's loudness
-    INPUT_LOUDNESS=$(ffmpeg -i "$file" -af "ebur128=framelog=verbose" -f null - 2>&1 | grep -oP 'I:\s*\K[-0-9.]+' )
-
-    echo "input loudness: ${INPUT_LOUDNESS}"
-
-    # Calculate the loudness difference
-    LOUDNESS_DIFFERENCE=$(echo "($TARGET_LOUDNESS - $INPUT_LOUDNESS) * ($TARGET_LOUDNESS - $INPUT_LOUDNESS > 0 && 1 || -1)" | bc -l)
-    ABS_LOUDNESS_DIFF=$(echo "sqrt(($TARGET_LOUDNESS - $INPUT_LOUDNESS) * ($TARGET_LOUDNESS - $INPUT_LOUDNESS))" | bc -l)
-
-    echo "loudness diff: ${LOUDNESS_DIFFERENCE}"
-
-    # Normalize the audio file if the loudness difference exceeds the tolerance
-    if (( $(echo "$ABS_LOUDNESS_DIFF > $TOLERANCE" | bc -l) )); then
-      GAIN=$(echo "$TARGET_LOUDNESS - $INPUT_LOUDNESS" | bc)
-      ffmpeg -i "$file" -af "volume=${GAIN}dB" -y "${file%.*}_normalized.${file##*.}" > /dev/null
-    else
-      echo "Skipping ${file##*/} (loudness difference: ${LOUDNESS_DIFFERENCE} LUFS)"
-    fi
-  done
+  if (( $(echo "$LOUDNESS_DIFFERENCE > $TOLERANCE" | bc -l) )); then
+    GAIN=$(echo "$TARGET_LOUDNESS - $INPUT_LOUDNESS" | bc -l)
+    ffmpeg -i "$file" -af "volume=${GAIN}dB" -y "${file%.*}_normalized.${file##*.}" > /dev/null 2>&1
+    echo "Normalized ${file##*/}"
+  else
+    echo "Skipping ${file##*/} (loudness difference within tolerance)"
+  fi
 }
 
-function process_directory() {
-  local dir="$1"
-  process_audio_files "$dir"
+if [ $# -eq 0 ]; then
+  echo "Usage: $0 path/to/audio-file"
+  exit 1
+fi
 
-  for subdir in "$dir"/*/; do
-    [ -d "$subdir" ] || continue
-    process_directory "$subdir"
-  done
-}
-
-process_directory "$AUDIO_FOLDER"
-echo "Audio normalization completed."
+normalize_audio_file "$1"
