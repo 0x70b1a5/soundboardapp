@@ -40,7 +40,6 @@ body {
   text-decoration: underline;
 }
 
-/* Add this code to the end of the styles.css file */
 #loading-container {
   position: fixed;
   bottom: 0;
@@ -57,3 +56,18 @@ body {
   transition: width 0.5s;
 }
 
+
+.breadcrumb {
+  margin: 20px;
+  font-size: 18px;
+  color: #333;
+  cursor: pointer;
+}
+
+.breadcrumb:hover {
+  text-decoration: underline;
+}
+
+h2 {
+  grid-column: 1 / span 5;
+}
