@@ -1,5 +1,9 @@
 #!/bin/bash
 
+#
+# WARNING: this script seems to make SHORT, QUIET SUONDS VERY LOUD FOR SOME REASON
+#
+
 # Target loudness level in LUFS
 TARGET_LOUDNESS=-16
 
