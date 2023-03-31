@@ -1,13 +1,11 @@
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
-const fs = require('fs');
 const path = require('path');
 const recursive = require('recursive-readdir');
 const isDirectory = require('is-directory');
 
 const app = express();
-const upload = multer();
 const soundboardDir = path.join(__dirname, 'public', 'soundboard');
 
 app.use(cors());
@@ -21,7 +19,7 @@ app.get('/sounds', (req, res) => {
       return res.status(500).json({ error: 'Unable to read soundboard directory' });
     }
 
-    const items = files.map(file => {
+    const items = files.sort().map(file => {
       const relativePath = file.replace(soundboardDir, '');
       return {
         type: isDirectory.sync(file) ? 'folder' : 'sound',

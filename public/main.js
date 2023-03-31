@@ -7,15 +7,43 @@ document.addEventListener('DOMContentLoaded', () => {
   let loadedCount = 0;
   let currentPath = '';
   
-  function getOrCreateHeading(text) {
-    let heading = document.querySelector(`h2[data-heading="${text}"]`);
+  function getOrCreateSection(text) {
+    let heading = document.querySelector(`button[data-heading="${text}"]`);
+    let section = document.querySelector(`section[data-heading="${text}"]`);
+    let headings = document.querySelector(`#headings`);
     if (!heading) {
-      heading = document.createElement('h2');
+      heading = document.createElement('button');
+      heading.classList.add('heading')
       heading.setAttribute('data-heading', text);
+      heading.setAttribute('data-seen', true);
       heading.textContent = text;
-      soundboard.appendChild(heading);
+      section = document.createElement('section');
+      section.setAttribute('data-heading', text)
+      section.setAttribute('data-seen', true)
+      heading.addEventListener('click', () => {
+        const newIsSeen = section.getAttribute('data-seen') == 'true' ? false : true
+        section.setAttribute('data-seen', newIsSeen)
+        heading.setAttribute('data-seen', newIsSeen)
+      })
+      headings.appendChild(heading);
+      soundboard.appendChild(section);
     }
-    return heading;
+    if (heading && section)
+      return [heading, section];
+    throw 'didnt get a section'
+  }
+
+  function stringToColor(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+  
+    let hslColor = 'hsl(';
+    const hue = (hash % 360);
+    hslColor += hue + ', 50%, 50%)';
+  
+    return hslColor;
   }
 
   function fetchSounds(path) {
@@ -46,16 +74,15 @@ document.addEventListener('DOMContentLoaded', () => {
             };
           }
 
-          const buttonContainer = document.createElement('div');
-          buttonContainer.classList.add('button-container');
-
           const button = document.createElement('button');
           button.classList.add('sound-button');
           const parts = sound.name.split('/')
+          let heading, section;
           if (parts.length > 1) {
-            getOrCreateHeading(parts[0])
+            [heading, section] = getOrCreateSection(parts[0])
           }
           button.textContent = parts.pop().replace(/\.\w+$/,'');
+          button.style = 'background-color: ' + stringToColor(section.getAttribute('data-heading'))
           button.addEventListener('click', () => {
             if (sound.type === 'folder') {
               currentPath = sound.relativePath;
@@ -70,8 +97,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           });
 
-          buttonContainer.appendChild(button);
-          soundboard.appendChild(buttonContainer);
+          let parent = section || soundboard;
+          parent.appendChild(button);
         });
       });
   }
