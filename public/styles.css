@@ -18,6 +18,7 @@ body {
 
 section {
   margin-bottom: 8px;
+  max-width: 200px;
 }
 
 section[data-heading]:not([data-seen=true]) {
