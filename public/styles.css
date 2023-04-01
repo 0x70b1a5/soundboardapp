@@ -18,7 +18,14 @@ body {
 
 section {
   margin-bottom: 8px;
-  max-width: 200px;
+  display: flex;
+  flex-flow: column wrap;
+}
+
+section::before {
+  content: attr(data-heading);
+  font-size: 0.5em;
+  margin: 4px auto;
 }
 
 section[data-heading]:not([data-seen=true]) {
