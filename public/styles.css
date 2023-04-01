@@ -16,6 +16,10 @@ body {
   flex-wrap: wrap;
 }
 
+section {
+  margin-bottom: 8px;
+}
+
 section[data-heading]:not([data-seen=true]) {
   display: none;
 }
@@ -41,16 +45,17 @@ section[data-heading]:not([data-seen=true]) {
 .heading {
   font-size: 18px;
   padding: 2px 5px;
-  margin: 1px;
-  background-color: skyblue;
+  margin: 2px 4px 4px 4px;
+  background-color: rgba(0,0,0,0.1);
   border: none;
   border-radius: 5px;
   transition: background-color 0.2s ease;
   cursor: pointer;
+  opacity: 0.7;
 }
 
 .heading[data-seen=true] {
-  background-color: aquamarine;
+  background-color: skyblue;;
   color: black;
   font-weight: bold;
 }
