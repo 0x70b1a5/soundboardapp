@@ -20,22 +20,22 @@ body {
 section {
   margin-bottom: 8px;
   display: flex;
-  flex-flow: column wrap;
+  flex-flow: row wrap;
 }
-
+/* 
 section::before {
   content: attr(data-heading);
   font-size: 0.5em;
   margin: 4px auto;
-}
+} */
 
-section[data-heading]:not([data-seen=true]) {
+section[data-heading]:not([data-seen=true]) .sound-button {
   display: none;
 }
 
 .sound-button {
   /* width: 100%; */
-  padding: 4px 5px;
+  padding: 8px 5px;
   margin: 1px;
   background-color: #3498db;
   border: none;
@@ -64,7 +64,7 @@ section[data-heading]:not([data-seen=true]) {
 }
 
 .heading[data-seen=true] {
-  background-color: skyblue;;
+  background-color: skyblue;
   color: black;
   font-weight: bold;
 }

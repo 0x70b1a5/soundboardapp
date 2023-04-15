@@ -1,16 +1,18 @@
 // main.js
+
 document.addEventListener('DOMContentLoaded', () => {
   const soundboard = document.getElementById('soundboard');
   const loadingContainer = document.getElementById('loading-container');
   const loadingBar = document.getElementById('loading-bar');
+  // const palette = new poline.Poline({ closedLoop: true })
   let currentAudio;
   let loadedCount = 0;
   let currentPath = '';
+  // let paletteCt
   
   function getOrCreateSection(text) {
     let heading = document.querySelector(`button[data-heading="${text}"]`);
     let section = document.querySelector(`section[data-heading="${text}"]`);
-    let headings = document.querySelector(`#headings`);
     if (!heading) {
       heading = document.createElement('button');
       heading.classList.add('heading')
@@ -25,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
         section.setAttribute('data-seen', newIsSeen)
         heading.setAttribute('data-seen', newIsSeen)
       })
-      headings.appendChild(heading);
+      section.appendChild(heading);
       soundboard.appendChild(section);
     }
     if (heading && section)
