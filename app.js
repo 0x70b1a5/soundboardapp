@@ -19,7 +19,8 @@ app.get('/sounds', (req, res) => {
       return res.status(500).json({ error: 'Unable to read soundboard directory' });
     }
 
-    const items = files.sort().map(file => {
+    const items = files.filter(f => f.endsWith('.mp3') || f.endsWith('.ogg'))
+      .sort().map(file => {
       const relativePath = file.replace(soundboardDir, '');
       return {
         type: isDirectory.sync(file) ? 'folder' : 'sound',

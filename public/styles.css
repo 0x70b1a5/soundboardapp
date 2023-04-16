@@ -21,6 +21,7 @@ section {
   margin-bottom: 8px;
   display: flex;
   flex-flow: row wrap;
+  width: 50%;
 }
 /* 
 section::before {
