@@ -34,6 +34,15 @@ app.get('/sounds', (req, res) => {
   });
 });
 
+app.get('*', (req, res) => {
+  const filePath = path.join(__dirname, 'public', req.path);
+  res.sendFile(filePath, (err) => {
+    if (err) {
+      res.status(404).send('File not found');
+    }
+  });
+});
+
 app.listen(process.env.PORT||3000, () => {
   console.log('Server started on http://localhost:'+(process.env.PORT || 3000));
 });
