@@ -1,4 +1,59 @@
 // main.js
+function generateDistinguishableColors(X) {
+  const colors = [];
+  const saturation = 0.5;
+  const value = 0.5;
+
+  for (let i = 0; i < X; i++) {
+    const hue = i / X * 2;
+    const [r, g, b] = hsvToRgb(hue, saturation, value);
+    const hexColor = rgbToHex(r, g, b);
+    colors.push(hexColor);
+  }
+
+  return colors;
+}
+
+function hsvToRgb(h, s, v) {
+  let r, g, b;
+  const i = Math.floor(h * 6);
+  const f = h * 6 - i;
+  const p = v * (1 - s);
+  const q = v * (1 - f * s);
+  const t = v * (1 - (1 - f) * s);
+
+  switch (i % 6) {
+    case 0:
+      (r = v), (g = t), (b = p);
+      break;
+    case 1:
+      (r = q), (g = v), (b = p);
+      break;
+    case 2:
+      (r = p), (g = v), (b = t);
+      break;
+    case 3:
+      (r = p), (g = q), (b = v);
+      break;
+    case 4:
+      (r = t), (g = p), (b = v);
+      break;
+    case 5:
+      (r = v), (g = p), (b = q);
+      break;
+  }
+
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
+function componentToHex(c) {
+  const hex = c.toString(16);
+  return hex.length === 1 ? "0" + hex : hex;
+}
+
+function rgbToHex(r, g, b) {
+  return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   const soundboard = document.getElementById('soundboard');
@@ -35,25 +90,21 @@ document.addEventListener('DOMContentLoaded', () => {
     throw 'didnt get a section'
   }
 
-  function stringToColor(str) {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    }
-  
-    let hslColor = 'hsl(';
-    const hue = (hash % 360);
-    hslColor += hue + ', 50%, 50%)';
-  
-    return hslColor;
-  }
-
   function fetchSounds(path) {
     fetch(`/sounds${path ? '?path=' + encodeURIComponent(path) : ''}`)
       .then(response => response.json())
       .then(sounds => {
         loadedCount = 0;
         soundboard.innerHTML = '';
+
+        const folderNamesAndColorIndices = {}
+        sounds.forEach(sound => {
+          folderNamesAndColorIndices[sound.name.replace(/^\//,'').split('/')[0]] = 0
+        })
+        const folderNames = Object.keys(folderNamesAndColorIndices)
+        const colors = generateDistinguishableColors(folderNames.length)
+        folderNames.map((folder, i) => folderNamesAndColorIndices[folder] = i)
+        console.log({ folderNames, folderNamesAndColorIndices })
 
         sounds.forEach((sound) => {
           let audio;
@@ -83,8 +134,8 @@ document.addEventListener('DOMContentLoaded', () => {
           if (parts.length > 1) {
             [heading, section] = getOrCreateSection(parts[0])
           }
-          button.textContent = parts.pop().replace(/\.\w+$/,'');
-          button.style = 'background-color: ' + stringToColor(section.getAttribute('data-heading'))
+          button.textContent = parts[1].replace(/\.\w+$/,'');
+          button.style = 'background-color: ' + colors[folderNamesAndColorIndices[parts[0]]]
           button.addEventListener('click', () => {
             if (sound.type === 'folder') {
               currentPath = sound.relativePath;
