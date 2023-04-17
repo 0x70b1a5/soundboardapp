@@ -1,8 +1,8 @@
 // main.js
 function generateDistinguishableColors(X) {
   const colors = [];
-  const saturation = 0.5;
-  const value = 0.5;
+  const saturation = 0.75;
+  const value = 0.75;
 
   for (let i = 0; i < X; i++) {
     const hue = i / X * 2;
