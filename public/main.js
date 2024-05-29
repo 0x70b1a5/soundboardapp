@@ -1,11 +1,11 @@
 // main.js
-function generateDistinguishableColors(X) {
+function generateDistinguishableColors(X, mod) {
   const colors = [];
   const saturation = 0.75;
   const value = 0.75;
 
   for (let i = 0; i < X; i++) {
-    const hue = i / X * 2;
+    const hue = i / X * (+mod || 1);
     const [r, g, b] = hsvToRgb(hue, saturation, value);
     const hexColor = rgbToHex(r, g, b);
     colors.push(hexColor);
@@ -102,7 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
           folderNamesAndColorIndices[sound.name.replace(/^\//,'').split('/')[0]] = 0
         })
         const folderNames = Object.keys(folderNamesAndColorIndices)
-        const colors = generateDistinguishableColors(folderNames.length)
+        const colors = generateDistinguishableColors(folderNames.length, 2)
         folderNames.map((folder, i) => folderNamesAndColorIndices[folder] = i)
         console.log({ folderNames, folderNamesAndColorIndices })
 
