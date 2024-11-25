@@ -1,20 +1,30 @@
 {
-  "name": "soundboardapp",
-  "version": "1.0.0",
-  "description": "",
-  "main": "app.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "is-directory": "^0.3.1",
-    "multer": "^1.4.5-lts.1",
-    "poline": "^0.6.0",
-    "recursive-readdir": "^2.2.3"
-  }
+    "name": "soundboard-preact",
+    "version": "1.0.0",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview",
+        "server": "node --loader ts-node/esm app.ts"
+    },
+    "dependencies": {
+        "classnames": "^2.5.1",
+        "cors": "^2.8.5",
+        "express": "^4.18.2",
+        "is-directory": "^0.3.1",
+        "preact": "^10.19.3",
+        "recursive-readdir": "^2.2.3"
+    },
+    "devDependencies": {
+        "@preact/preset-vite": "^2.7.0",
+        "@types/cors": "^2.8.17",
+        "@types/express": "^4.17.21",
+        "@types/node": "^20.10.5",
+        "@types/recursive-readdir": "^2.2.4",
+        "@unocss/preset-wind": "^0.64.1",
+        "typescript": "^5.3.3",
+        "unocss": "^0.64.1",
+        "vite": "^5.0.10"
+    }
 }
