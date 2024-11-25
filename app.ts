@@ -50,8 +50,8 @@ app.get('*', (req, res) => {
     res.sendStatus(404);
 });
 
-app.listen(process.env.PORT || 3000, () => {
+app.listen(process.env.PORT || 5174, () => {
     console.log(
-        'Server started on http://localhost:' + (process.env.PORT || 3000),
+        'Server started on http://localhost:' + (process.env.PORT || 5174),
     );
 });
