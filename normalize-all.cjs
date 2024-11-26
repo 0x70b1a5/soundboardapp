@@ -43,8 +43,9 @@ async function normalizeFile(filePath) {
             await execFileAsync(ffmpeg, [
                 '-i', filePath,
                 '-af', `volume=${gain}dB`,
-                '-y', filePath
+                '-y', filePath + '.normalized.ogg'
             ]);
+            fs.rename(filePath + '.normalized.ogg', filePath);
             console.log(`Normalized with ${gain}dB gain`);
         } else {
             console.log('Within tolerance, skipping');
@@ -74,8 +75,30 @@ async function processDirectory(dirPath) {
 
 async function main() {
     console.log('Beginning audio normalization...');
-    await processDirectory(CONFIG.audioFolder);
+
+    // Get paths from command line arguments, defaulting to CONFIG.audioFolder if none provided
+    const paths = process.argv.slice(2);
+
+    if (paths.length === 0) {
+        await processDirectory(CONFIG.audioFolder);
+    } else {
+        for (const inputPath of paths) {
+            try {
+                const stats = await fs.stat(inputPath);
+                if (stats.isDirectory()) {
+                    await processDirectory(inputPath);
+                } else if (/\.(mp3|ogg)$/i.test(inputPath)) {
+                    await normalizeFile(inputPath);
+                } else {
+                    console.log(`Skipping ${inputPath}: not an mp3 or ogg file`);
+                }
+            } catch (error) {
+                console.error(`Error processing ${inputPath}:`, error);
+            }
+        }
+    }
+
     console.log('Audio normalization completed.');
 }
 
-main().catch(console.error); 
+main().catch(console.error);
