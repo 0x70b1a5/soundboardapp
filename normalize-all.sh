@@ -33,7 +33,7 @@ function process_audio_files() {
     # Normalize the audio file if the loudness difference exceeds the tolerance
     if (( $(echo "$ABS_LOUDNESS_DIFF > $TOLERANCE" | bc -l) )); then
       GAIN=$(echo "$TARGET_LOUDNESS - $INPUT_LOUDNESS" | bc)
-      ffmpeg -i "$file" -af "volume=${GAIN}dB" -y "${file%.*}_normalized.${file##*.}" > /dev/null
+      ffmpeg -i "$file" -af "volume=${GAIN}dB" -y "${file}" > /dev/null
     else
       echo "Skipping ${file##*/} (loudness difference: ${LOUDNESS_DIFFERENCE} LUFS)"
     fi

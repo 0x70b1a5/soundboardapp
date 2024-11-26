@@ -1,7 +1,7 @@
-import express from 'express';
-import cors from 'cors';
-import path from 'path';
-import recursive from 'recursive-readdir';
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const recursive = require('recursive-readdir');
 
 const app = express();
 const soundboardDir = path.join(process.cwd(), 'public', 'soundboard');

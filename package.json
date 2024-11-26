@@ -12,9 +12,11 @@
         "classnames": "^2.5.1",
         "cors": "^2.8.5",
         "express": "^4.18.2",
+        "ffmpeg-static": "^5.2.0",
         "is-directory": "^0.3.1",
         "preact": "^10.19.3",
-        "recursive-readdir": "^2.2.3"
+        "recursive-readdir": "^2.2.3",
+        "ts-node": "^10.9.2"
     },
     "devDependencies": {
         "@preact/preset-vite": "^2.7.0",
