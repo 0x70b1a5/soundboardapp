@@ -14,6 +14,11 @@ export function App() {
     const [sortMode, setSortMode] = useState(SortMode.ALPHABETICAL);
     const [searchTerm, setSearchTerm] = useState('');
     const [colors, setColors] = useState<string[]>([]);
+    const [isDark, setIsDark] = useState(
+        window.matchMedia('(prefers-color-scheme: dark)').matches
+    );
+
+    const [buttonSize, setButtonSize] = useState<'xxs' | 'xs' | 'sm' | 'md' | 'lg'>('md');
 
     useEffect(() => {
         setBackgroundStyle(generateBackground());
@@ -27,6 +32,24 @@ export function App() {
     useEffect(() => {
         fetchSounds();
     }, []);
+
+    useEffect(() => {
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        const handleChange = (e: MediaQueryListEvent) => setIsDark(e.matches);
+        mediaQuery.addEventListener('change', handleChange);
+
+        if (isDark) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+
+        return () => mediaQuery.removeEventListener('change', handleChange);
+    }, [isDark]);
+
+    const toggleDarkMode = () => {
+        setIsDark(!isDark);
+    };
 
     const fetchSounds = async () => {
         try {
@@ -52,16 +75,44 @@ export function App() {
         }
     };
 
+    const increaseButtonSize = () => {
+        setButtonSize(buttonSize === 'xxs' ? 'xs' : buttonSize === 'xs' ? 'sm' : buttonSize === 'sm' ? 'md' : buttonSize === 'md' ? 'lg' : 'xxs');
+    }
+
+    const decreaseButtonSize = () => {
+        setButtonSize(buttonSize === 'xxs' ? 'lg' : buttonSize === 'xs' ? 'xxs' : buttonSize === 'sm' ? 'xs' : buttonSize === 'md' ? 'sm' : 'md');
+    }
+
     return (
         <div
             style={{backgroundImage: backgroundStyle}}
-            class="grow self-stretch max-w-screen"
+            class="grow self-stretch max-w-screen min-h-screen grow self-stretch"
         >
-            <div class="sticky top-0 bg-white mb-6 flex flex-col gap-4 items-center z-10 h-1/4 shadow-xl backdrop-blur-sm">
+            <div class="fixed right-4 bottom-4 z-10 flex items-center gap-2">
+                <button
+                    onClick={increaseButtonSize}
+                    class="btn px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full text-xl shadow-xl dark:shadow-white/10"
+                >
+                    <span class='filter dark:invert'>➕</span>
+                </button>
+                <button
+                    onClick={decreaseButtonSize}
+                    class="btn px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full text-xl shadow-xl dark:shadow-white/10"
+                >
+                    <span class='filter dark:invert'>➖</span>
+                </button>
+                <button
+                    onClick={toggleDarkMode}
+                    class="btn px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full text-xl shadow-xl dark:shadow-white/10"
+                >
+                    {isDark ? '🌞' : '🌙'}
+                </button>
+            </div>
+            <div class="sticky top-0 bg-white dark:bg-gray-800 mb-6 flex flex-col gap-4 items-center z-10 h-1/4 shadow-xl backdrop-blur-sm">
                 <div className="flex grow self-stretch">
                     <button class={classNames("font-bold btn w-1/2 text-xl grow self-stretch px-8 py-4 border-b-2 border-transparent", {
                         'opacity-50 hover:bg-fuchsia/10': sortMode !== SortMode.ALPHABETICAL,
-                        'opacity-100 bg-fuchsia-100 border-b-2 border-b-fuchsia-500': sortMode === SortMode.ALPHABETICAL,
+                        'opacity-100 bg-fuchsia/10 border-b-2 border-b-fuchsia-500': sortMode === SortMode.ALPHABETICAL,
                     })}
                         onClick={() => setSortMode(SortMode.ALPHABETICAL)}
                     >
@@ -69,7 +120,7 @@ export function App() {
                     </button>
                     <button class={classNames("font-bold btn w-1/2 text-xl grow self-stretch px-8 py-4 border-b-2 border-transparent", {
                             'opacity-50 hover:bg-fuchsia/10': sortMode !== SortMode.CATEGORY,
-                            'opacity-100 bg-fuchsia-100 border-b-2 border-b-fuchsia-500': sortMode === SortMode.CATEGORY,
+                            'opacity-100 bg-fuchsia/10 border-b-2 border-b-fuchsia-500': sortMode === SortMode.CATEGORY,
                     })}
                         onClick={() => setSortMode(SortMode.CATEGORY)}
                     >
@@ -80,7 +131,7 @@ export function App() {
                 <input
                     type="search"
                     placeholder="Search sounds..."
-                    class="self-stretch grow mx-4 mb-4 px-4 py-2 rounded-lg focus:bg-yellow-50 bg-gray-50 border-none text-lg"
+                    class="self-stretch grow mx-4 mb-4 px-4 py-2 rounded-lg focus:bg-yellow-50 dark:focus:bg-yellow-900 dark:bg-white/10 dark:text-white bg-gray/50 border-none text-lg"
                     value={searchTerm}
                     onInput={(e) => setSearchTerm(e.currentTarget.value)}
                 />
@@ -90,12 +141,14 @@ export function App() {
                 <LoadingBar progress={loadingProgress} />
             ) : (
                 <SoundList
+                    buttonSize={buttonSize}
                     sounds={sounds.filter(s =>
                         s.name.toLowerCase().includes(searchTerm.toLowerCase())
                     )}
                     sortMode={sortMode}
                     onPlay={playSound}
                     currentAudio={currentAudio}
+                    darkMode={isDark}
                 />
             )}
         </div>

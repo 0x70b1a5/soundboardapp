@@ -7,11 +7,15 @@ export const SoundButton = ({
     color,
     isPlaying = false,
     onPlay,
+    buttonSize = 'md',
+    darkMode = false,
 }: {
     sound: Sound;
     color: string;
     isPlaying: boolean;
     onPlay: (sound: Sound) => void;
+    buttonSize?: 'xxs' | 'xs' | 'sm' | 'md' | 'lg';
+    darkMode?: boolean;
 }) => {
     const displayName = sound.name
         .split('/')
@@ -20,8 +24,12 @@ export const SoundButton = ({
 
     return (
         <button
-            class={classNames('btn w-full p-4 rounded-lg text-white font-medium transition-all duration-200 hover:(transform scale-102 shadow-lg) active:scale-98', {
-                'ring-4 ring-white/30': isPlaying,
+            class={classNames('btn text-white transition-all duration-200 hover:(transform scale-102 shadow-lg) active:scale-98', {
+                'px-2 py-1 rounded-full text-xs': buttonSize === 'xxs',
+                'px-3 py-2 rounded-full text-sm': buttonSize === 'xs',
+                'px-4 py-2 rounded-full text-base': buttonSize === 'sm',
+                'px-6 py-3 rounded-full text-lg': buttonSize === 'md',
+                'px-8 py-4 rounded-full text-xl': buttonSize === 'lg',
             })}
             style={{ backgroundColor: color }}
             onClick={() => onPlay(sound)}

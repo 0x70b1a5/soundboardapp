@@ -2,19 +2,24 @@ import { h } from 'preact';
 import { SoundButton } from './SoundButton';
 import { generateDistinguishableColors } from '../lib/colors';
 import { Sound } from '../lib/types';
+import classNames from 'classnames';
 
 export const SoundList = ({
     sounds,
     sortMode,
     onPlay,
     currentAudio,
+    buttonSize = 'lg',
+    darkMode = false,
 }: {
     sounds: Sound[];
     sortMode: string;
     onPlay: (sound: Sound) => void;
     currentAudio: HTMLAudioElement | null;
+    buttonSize?: 'xxs' | 'xs' | 'sm' | 'md' | 'lg';
+    darkMode?: boolean;
 }) => {
-    const gridClass = 'h-full max-w-screen p-6 md:p-8 grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3'
+    const gridClass = `h-full grow self-stretch max-w-screen flex flex-wrap gap-2`;
 
     if (sortMode === 'alphabetical') {
         const sortedSounds = [...sounds].sort((a, b) => {
@@ -24,13 +29,15 @@ export const SoundList = ({
         });
 
         return (
-            <div class={gridClass}>
+            <div class={classNames(gridClass, 'px-8')}>
                 {sortedSounds.map((sound, index) => (
                     <SoundButton
                         sound={sound}
-                        color={generateDistinguishableColors(sortedSounds.length)[index]}
+                        color={generateDistinguishableColors(sortedSounds.length, undefined, darkMode)[index]}
                         isPlaying={Boolean(currentAudio?.src.includes(sound.path))}
                         onPlay={onPlay}
+                        buttonSize={buttonSize}
+                        darkMode={darkMode}
                     />
                 ))}
             </div>
@@ -39,20 +46,27 @@ export const SoundList = ({
 
     // Category mode
     const categories = Array.from(new Set(sounds.map(s => s.name.split('/')[1])));
-    const categoryColors = generateDistinguishableColors(categories.length);
+    const categoryColors = generateDistinguishableColors(categories.length, undefined, darkMode);
 
     console.log({categories, categoryColors});
 
     return (
-        <div class="flex flex-col gap-8">
+        <div class={classNames("flex flex-col gap-2", {
+        })}>
             {categories.map((category, categoryIndex) => {
                 const categorySounds = sounds
                     .filter(s => s.name.startsWith('/'+category))
                     .sort((a, b) => a.name.localeCompare(b.name));
 
                 return (
-                    <div key={category} class="space-y-3">
-                        <h2 class="ml-8 text-xl font-semibold text-gray-700">
+                    <div key={category}>
+                        <h2 class={classNames("font-semibold text-gray-700 dark:text-gray-200", {
+                            'ml-4 text-xs': buttonSize === 'xxs',
+                            'ml-6 text-sm': buttonSize === 'xs',
+                            'ml-8 text-base': buttonSize === 'sm',
+                            'ml-10 text-lg': buttonSize === 'md',
+                            'ml-12 text-xl': buttonSize === 'lg',
+                        })}>
                             {category}
                         </h2>
                         <div class={gridClass}>
@@ -62,6 +76,8 @@ export const SoundList = ({
                                     color={categoryColors[categoryIndex]}
                                     isPlaying={Boolean(currentAudio?.src.includes(sound.path))}
                                     onPlay={onPlay}
+                                    buttonSize={buttonSize}
+                                    darkMode={darkMode}
                                 />
                             ))}
                         </div>

@@ -7,7 +7,7 @@ export default defineConfig({
         preact(),
         UnoCSS({
             shortcuts: {
-                'btn': 'border-0 cursor-pointer hover:opacity-80 bg-transparent',
+                'btn': 'border-0 cursor-pointer hover:opacity-80 bg-transparent dark:!text-white',
             }
         })
     ],

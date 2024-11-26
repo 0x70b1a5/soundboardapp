@@ -32,10 +32,10 @@ export function hsvToRgb(h: number, s: number, v: number) {
     return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
 
-export function generateDistinguishableColors(count: number, mod = 1) {
+export function generateDistinguishableColors(count: number, mod = 1, darkMode = false) {
     return Array.from({ length: count }, (_, i) => {
         const hue = (i / count) * mod;
-        const [r, g, b] = hsvToRgb(hue, 1, 0.75);
+        const [r, g, b] = hsvToRgb(hue, 1, darkMode ? 0.5 : 0.8);
         return `rgb(${r}, ${g}, ${b})`;
     });
 }
