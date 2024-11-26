@@ -9,8 +9,10 @@ export const SoundList = ({
     sortMode,
     onPlay,
     currentAudio,
+    onFave,
     buttonSize = 'lg',
     darkMode = false,
+    className,
 }: {
     sounds: Sound[];
     sortMode: string;
@@ -18,6 +20,8 @@ export const SoundList = ({
     currentAudio: HTMLAudioElement | null;
     buttonSize?: 'xxs' | 'xs' | 'sm' | 'md' | 'lg';
     darkMode?: boolean;
+    onFave: (sound: Sound) => void;
+    className?: string;
 }) => {
     const gridClass = `h-full grow self-stretch max-w-screen flex flex-wrap gap-2`;
 
@@ -29,13 +33,14 @@ export const SoundList = ({
         });
 
         return (
-            <div class={classNames(gridClass, 'px-8')}>
+            <div class={classNames(gridClass, 'px-8', className)}>
                 {sortedSounds.map((sound, index) => (
                     <SoundButton
                         sound={sound}
                         color={generateDistinguishableColors(sortedSounds.length, undefined, darkMode)[index]}
                         isPlaying={Boolean(currentAudio?.src.includes(sound.path))}
                         onPlay={onPlay}
+                        onFave={onFave}
                         buttonSize={buttonSize}
                         darkMode={darkMode}
                     />
@@ -48,14 +53,14 @@ export const SoundList = ({
     const categories = Array.from(new Set(sounds.map(s => s.name.split('/')[1])));
     const categoryColors = generateDistinguishableColors(categories.length, undefined, darkMode);
 
-    console.log({categories, categoryColors});
+    console.log({ categories, categoryColors });
 
     return (
         <div class={classNames("flex flex-col gap-2", {
         })}>
             {categories.map((category, categoryIndex) => {
                 const categorySounds = sounds
-                    .filter(s => s.name.startsWith('/'+category))
+                    .filter(s => s.name.startsWith('/' + category))
                     .sort((a, b) => a.name.localeCompare(b.name));
 
                 return (
@@ -72,6 +77,7 @@ export const SoundList = ({
                         <div class={gridClass}>
                             {categorySounds.map((sound) => (
                                 <SoundButton
+                                    onFave={onFave}
                                     sound={sound}
                                     color={categoryColors[categoryIndex]}
                                     isPlaying={Boolean(currentAudio?.src.includes(sound.path))}

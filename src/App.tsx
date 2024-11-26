@@ -17,7 +17,7 @@ export function App() {
     const [isDark, setIsDark] = useState(
         window.matchMedia('(prefers-color-scheme: dark)').matches
     );
-
+    const [faves, setFaves] = useState<Sound[]>(localStorage.getItem('sound-theo_faves') ? JSON.parse(localStorage.getItem('sound-theo_faves')!) : []);
     const [buttonSize, setButtonSize] = useState<'xxs' | 'xs' | 'sm' | 'md' | 'lg'>('md');
 
     useEffect(() => {
@@ -27,7 +27,7 @@ export function App() {
     const { playSound, preloadSounds, loading, loadingProgress, currentAudio } =
         useAudio();
 
-    console.log({currentAudio});
+    console.log({ currentAudio });
 
     useEffect(() => {
         fetchSounds();
@@ -75,6 +75,15 @@ export function App() {
         }
     };
 
+    const onFave = (sound: Sound) => {
+        if (faves.includes(sound)) {
+            setFaves(faves.filter(s => s.name !== sound.name));
+        } else {
+            setFaves([...faves, sound]);
+        }
+        localStorage.setItem('sound-theo_faves', JSON.stringify(faves));
+    }
+
     const increaseButtonSize = () => {
         setButtonSize(buttonSize === 'xxs' ? 'xs' : buttonSize === 'xs' ? 'sm' : buttonSize === 'sm' ? 'md' : buttonSize === 'md' ? 'lg' : 'xxs');
     }
@@ -85,7 +94,7 @@ export function App() {
 
     return (
         <div
-            style={{backgroundImage: backgroundStyle}}
+            style={{ backgroundImage: backgroundStyle }}
             class="grow self-stretch max-w-screen min-h-screen grow self-stretch"
         >
             <div class="fixed right-4 bottom-4 z-10 flex items-center gap-2">
@@ -108,7 +117,7 @@ export function App() {
                     {isDark ? '🌞' : '🌙'}
                 </button>
             </div>
-            <div class="sticky top-0 bg-white dark:bg-gray-800 mb-6 flex flex-col gap-4 items-center z-10 h-1/4 shadow-xl backdrop-blur-sm">
+            <div class="sticky top-0 bg-white dark:bg-gray-800 pb-4 mb-6 flex flex-col gap-4 items-center z-10 h-1/4 shadow-xl backdrop-blur-sm">
                 <div className="flex grow self-stretch">
                     <button class={classNames("font-bold btn w-1/2 text-xl grow self-stretch px-8 py-4 border-b-2 border-transparent", {
                         'opacity-50 hover:bg-fuchsia/10': sortMode !== SortMode.ALPHABETICAL,
@@ -119,8 +128,8 @@ export function App() {
                         A-Z
                     </button>
                     <button class={classNames("font-bold btn w-1/2 text-xl grow self-stretch px-8 py-4 border-b-2 border-transparent", {
-                            'opacity-50 hover:bg-fuchsia/10': sortMode !== SortMode.CATEGORY,
-                            'opacity-100 bg-fuchsia/10 border-b-2 border-b-fuchsia-500': sortMode === SortMode.CATEGORY,
+                        'opacity-50 hover:bg-fuchsia/10': sortMode !== SortMode.CATEGORY,
+                        'opacity-100 bg-fuchsia/10 border-b-2 border-b-fuchsia-500': sortMode === SortMode.CATEGORY,
                     })}
                         onClick={() => setSortMode(SortMode.CATEGORY)}
                     >
@@ -131,10 +140,24 @@ export function App() {
                 <input
                     type="search"
                     placeholder="Search sounds..."
-                    class="self-stretch grow mx-4 mb-4 px-4 py-2 rounded-lg focus:bg-yellow-50 dark:focus:bg-yellow-900 dark:bg-white/10 dark:text-white bg-gray/50 border-none text-lg"
+                    class="self-stretch grow mx-4 px-4 py-2 rounded-lg focus:bg-yellow-50 dark:focus:bg-yellow-900 dark:bg-white/10 dark:text-white bg-gray/50 border-none text-lg"
                     value={searchTerm}
                     onInput={(e) => setSearchTerm(e.currentTarget.value)}
                 />
+
+                {faves?.length > 0 ? <>
+                    <h2 class="m-0 text-center text-lg font-bold">Favorites</h2>
+                    <SoundList
+                        className="mb-4"
+                        buttonSize={buttonSize}
+                        sounds={faves}
+                        sortMode={sortMode}
+                        onPlay={playSound}
+                        currentAudio={currentAudio}
+                        darkMode={isDark}
+                        onFave={onFave}
+                    />
+                </> : <p class="m-0 text-center text-lg opacity-50">double tap to favorite</p>}
             </div>
 
             {loading ? (
@@ -149,6 +172,7 @@ export function App() {
                     onPlay={playSound}
                     currentAudio={currentAudio}
                     darkMode={isDark}
+                    onFave={onFave}
                 />
             )}
         </div>
