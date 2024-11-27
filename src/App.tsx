@@ -1,4 +1,5 @@
 import { h } from 'preact';
+import { FaMinus, FaPlus } from 'react-icons/fa';
 import { useState, useEffect } from 'preact/hooks';
 import { SoundList } from './components/SoundList';
 import { LoadingBar } from './components/LoadingBar';
@@ -100,15 +101,15 @@ export function App() {
             <div class="fixed right-4 bottom-4 z-10 flex items-center gap-2">
                 <button
                     onClick={increaseButtonSize}
-                    class="btn px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full text-xl shadow-xl dark:shadow-white/10"
+                    class="btn px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full text-xl shadow-xl dark:shadow-white/10 text-black dark:text-white"
                 >
-                    <span class='filter dark:invert'>➕</span>
+                    <FaPlus />
                 </button>
                 <button
                     onClick={decreaseButtonSize}
-                    class="btn px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full text-xl shadow-xl dark:shadow-white/10"
+                    class="btn px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full text-xl shadow-xl dark:shadow-white/10 text-black dark:text-white"
                 >
-                    <span class='filter dark:invert'>➖</span>
+                    <FaMinus />
                 </button>
                 <button
                     onClick={toggleDarkMode}
