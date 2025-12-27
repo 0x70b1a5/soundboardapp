@@ -12,4 +12,5 @@ export interface Sound {
     type: 'sound' | 'folder';
     name: string;
     path: string;
+    isLoaded?: boolean;
 }

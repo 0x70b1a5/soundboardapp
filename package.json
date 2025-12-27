@@ -27,7 +27,7 @@
         "@types/recursive-readdir": "^2.2.4",
         "@unocss/preset-wind": "^0.64.1",
         "typescript": "^5.3.3",
-        "unocss": "^0.64.1",
-        "vite": "^5.0.10"
+        "unocss": "^66.5.11",
+        "vite": "^7.3.0"
     }
 }
