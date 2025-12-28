@@ -24,32 +24,76 @@ export function useAudio() {
     // Pitch: semitones offset, -12 to +12 (one octave each direction)
     const [pitch, setPitch] = useState<number>(0);
 
-    // Shared pitch shifter effect
-    const pitchShiftRef = useRef<Tone.PitchShift | null>(null);
+    // Feature toggles
+    const [pitchLock, setPitchLock] = useState<boolean>(false); // When true, speed affects pitch (classic vinyl style)
+    const [reverb, setReverb] = useState<boolean>(false);
+    const [reverbWet, setReverbWet] = useState<number>(0.4); // 0-1 wet/dry mix
+    const [reverse, setReverse] = useState<boolean>(false);
 
-    // Initialize pitch shifter on mount
+    // Shared effects chain
+    const pitchShiftRef = useRef<Tone.PitchShift | null>(null);
+    const reverbRef = useRef<Tone.Reverb | null>(null);
+
+    // Track connected players for reconnection when effects change
+    const connectedPlayersRef = useRef<Set<Tone.Player>>(new Set());
+
+    // Initialize effects on mount
     useEffect(() => {
+        // Create reverb (but bypass by default)
+        reverbRef.current = new Tone.Reverb({
+            decay: 2.5,
+            wet: 0.4,
+        }).toDestination();
+
+        // Create pitch shifter, connect to reverb
         pitchShiftRef.current = new Tone.PitchShift({
             pitch: 0,
             windowSize: 0.1,
             delayTime: 0,
-        }).toDestination();
+        });
 
         return () => {
             pitchShiftRef.current?.dispose();
+            reverbRef.current?.dispose();
         };
     }, []);
 
-    // Update pitch shift when pitch OR speed changes
-    // We compensate for the pitch change caused by playbackRate
-    // so that "speed" is truly tempo-only
+    // Update effect chain when reverb toggle changes
+    useEffect(() => {
+        if (!pitchShiftRef.current || !reverbRef.current) return;
+
+        // Disconnect pitch shifter from current destination
+        pitchShiftRef.current.disconnect();
+
+        if (reverb) {
+            // Route through reverb
+            pitchShiftRef.current.connect(reverbRef.current);
+        } else {
+            // Direct to destination
+            pitchShiftRef.current.toDestination();
+        }
+    }, [reverb]);
+
+    // Update reverb wetness
+    useEffect(() => {
+        if (reverbRef.current) {
+            reverbRef.current.wet.value = reverbWet;
+        }
+    }, [reverbWet]);
+
+    // Update pitch shift when pitch, speed, or pitchLock changes
     useEffect(() => {
         if (pitchShiftRef.current) {
-            // Compensation: playbackRate of 2 = +12 semitones, so we subtract to neutralize
-            const speedPitchCompensation = -12 * Math.log2(speed);
-            pitchShiftRef.current.pitch = pitch + speedPitchCompensation;
+            if (pitchLock) {
+                // Classic mode: speed affects pitch naturally, only apply user's pitch offset
+                pitchShiftRef.current.pitch = pitch;
+            } else {
+                // Independent mode: compensate for speed's pitch change
+                const speedPitchCompensation = -12 * Math.log2(speed);
+                pitchShiftRef.current.pitch = pitch + speedPitchCompensation;
+            }
         }
-    }, [pitch, speed]);
+    }, [pitch, speed, pitchLock]);
 
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -74,6 +118,7 @@ export function useAudio() {
             // Connect to pitch shifter
             if (pitchShiftRef.current) {
                 player.connect(pitchShiftRef.current);
+                connectedPlayersRef.current.add(player);
             } else {
                 player.toDestination();
             }
@@ -123,6 +168,7 @@ export function useAudio() {
 
             const { player } = loadedSound;
             player.playbackRate = speed;
+            player.reverse = reverse;
 
             // Clear playing state when sound ends
             player.onstop = () => {
@@ -194,5 +240,13 @@ export function useAudio() {
         setSpeed,
         pitch,
         setPitch,
+        pitchLock,
+        setPitchLock,
+        reverb,
+        setReverb,
+        reverbWet,
+        setReverbWet,
+        reverse,
+        setReverse,
     };
 }
