@@ -25,7 +25,7 @@ export function App() {
         setBackgroundStyle(generateBackground());
     }, []);
 
-    const { playSound, preloadSounds, loading, loadingProgress, currentAudio, loadedSoundsList, speed, setSpeed, pitch, setPitch } =
+    const { playSound, preloadSounds, loading, loadingProgress, currentlyPlayingPath, loadedSoundsList, speed, setSpeed, pitch, setPitch } =
         useAudio();
 
     // Merge sounds metadata with loaded status for progressive display
@@ -105,11 +105,34 @@ export function App() {
             style={{ backgroundImage: backgroundStyle }}
             class="grow self-stretch max-w-screen min-h-screen grow self-stretch"
         >
-            <div class="fixed right-4 bottom-4 z-10 flex flex-col items-end gap-2">
+            {/* Floating controls - top right on desktop */}
+            <div class="hidden md:flex fixed right-4 top-4 z-20 items-center gap-2">
+                <button
+                    onClick={increaseButtonSize}
+                    class="btn px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-xl shadow-xl dark:shadow-white/10 text-black dark:text-white"
+                >
+                    <FaPlus />
+                </button>
+                <button
+                    onClick={decreaseButtonSize}
+                    class="btn px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-xl shadow-xl dark:shadow-white/10 text-black dark:text-white"
+                >
+                    <FaMinus />
+                </button>
+                <button
+                    onClick={toggleDarkMode}
+                    class="btn px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-xl shadow-xl dark:shadow-white/10"
+                >
+                    {isDark ? '🌞' : '🌙'}
+                </button>
+            </div>
+
+            {/* Desktop sliders - bottom right, max half screen width */}
+            <div class="hidden md:flex fixed right-4 bottom-4 z-20 flex-col items-end gap-2 max-w-[50vw]">
                 {/* Speed slider */}
-                <div class="flex items-center gap-2 bg-gray-100 dark:bg-gray-700 rounded-full px-3 py-2 shadow-xl dark:shadow-white/10">
-                    <span class="text-xs font-bold text-gray-500 dark:text-gray-400">⏱</span>
-                    <span class="text-xs font-mono text-gray-600 dark:text-gray-300 min-w-10 text-center">
+                <div class="flex items-center gap-3 bg-gray-100/95 dark:bg-gray-700/95 backdrop-blur rounded-full px-4 py-2 shadow-xl dark:shadow-white/10">
+                    <span class="text-sm font-bold text-gray-500 dark:text-gray-400">⏱</span>
+                    <span class="text-sm font-mono text-gray-600 dark:text-gray-300 min-w-12 text-center">
                         {speed.toFixed(2)}×
                     </span>
                     <input
@@ -119,21 +142,21 @@ export function App() {
                         step="0.05"
                         value={speed}
                         onInput={(e) => setSpeed(parseFloat(e.currentTarget.value))}
-                        class="w-16 sm:w-24 h-2 accent-cyan-500 cursor-pointer"
+                        class="w-48 h-2 accent-cyan-500 cursor-pointer"
                         title="Speed (tempo)"
                     />
                     <button
                         onClick={() => setSpeed(1.0)}
-                        class="text-xs px-2 py-1 rounded bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200"
+                        class="text-sm px-2 py-1 rounded bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200"
                         title="Reset speed"
                     >
                         ↺
                     </button>
                 </div>
                 {/* Pitch slider */}
-                <div class="flex items-center gap-2 bg-gray-100 dark:bg-gray-700 rounded-full px-3 py-2 shadow-xl dark:shadow-white/10">
-                    <span class="text-xs font-bold text-gray-500 dark:text-gray-400">♪</span>
-                    <span class="text-xs font-mono text-gray-600 dark:text-gray-300 min-w-10 text-center">
+                <div class="flex items-center gap-3 bg-gray-100/95 dark:bg-gray-700/95 backdrop-blur rounded-full px-4 py-2 shadow-xl dark:shadow-white/10">
+                    <span class="text-sm font-bold text-gray-500 dark:text-gray-400">♪</span>
+                    <span class="text-sm font-mono text-gray-600 dark:text-gray-300 min-w-12 text-center">
                         {pitch > 0 ? '+' : ''}{pitch}st
                     </span>
                     <input
@@ -143,33 +166,86 @@ export function App() {
                         step="1"
                         value={pitch}
                         onInput={(e) => setPitch(parseInt(e.currentTarget.value))}
-                        class="w-16 sm:w-24 h-2 accent-fuchsia-500 cursor-pointer"
+                        class="w-48 h-2 accent-fuchsia-500 cursor-pointer"
                         title="Pitch (semitones)"
                     />
                     <button
                         onClick={() => setPitch(0)}
-                        class="text-xs px-2 py-1 rounded bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200"
+                        class="text-sm px-2 py-1 rounded bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200"
                         title="Reset pitch"
                     >
                         ↺
                     </button>
                 </div>
-                <div class="flex items-center gap-2">
+            </div>
+
+            {/* Mobile sliders - fixed full-width bottom bars, thicker for touch */}
+            <div class="md:hidden fixed bottom-0 left-0 right-0 z-20 flex flex-col bg-gray-100/95 dark:bg-gray-800/95 backdrop-blur shadow-[0_-4px_20px_rgba(0,0,0,0.15)]">
+                {/* Speed slider */}
+                <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                    <span class="text-base font-bold text-gray-500 dark:text-gray-400">⏱</span>
+                    <span class="text-sm font-mono text-gray-600 dark:text-gray-300 min-w-14 text-center">
+                        {speed.toFixed(2)}×
+                    </span>
+                    <input
+                        type="range"
+                        min="0.5"
+                        max="2"
+                        step="0.05"
+                        value={speed}
+                        onInput={(e) => setSpeed(parseFloat(e.currentTarget.value))}
+                        class="flex-1 h-6 accent-cyan-500 cursor-pointer touch-pan-x"
+                        title="Speed (tempo)"
+                    />
                     <button
-                        onClick={increaseButtonSize}
-                        class="btn px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full text-xl shadow-xl dark:shadow-white/10 text-black dark:text-white"
+                        onClick={() => setSpeed(1.0)}
+                        class="text-base px-3 py-2 rounded-lg bg-gray-200 dark:bg-gray-600 active:bg-gray-300 dark:active:bg-gray-500 text-gray-700 dark:text-gray-200"
+                        title="Reset speed"
                     >
-                        <FaPlus />
+                        ↺
                     </button>
+                </div>
+                {/* Pitch slider */}
+                <div class="flex items-center gap-3 px-4 py-3">
+                    <span class="text-base font-bold text-gray-500 dark:text-gray-400">♪</span>
+                    <span class="text-sm font-mono text-gray-600 dark:text-gray-300 min-w-14 text-center">
+                        {pitch > 0 ? '+' : ''}{pitch}st
+                    </span>
+                    <input
+                        type="range"
+                        min="-12"
+                        max="12"
+                        step="1"
+                        value={pitch}
+                        onInput={(e) => setPitch(parseInt(e.currentTarget.value))}
+                        class="flex-1 h-6 accent-fuchsia-500 cursor-pointer touch-pan-x"
+                        title="Pitch (semitones)"
+                    />
+                    <button
+                        onClick={() => setPitch(0)}
+                        class="text-base px-3 py-2 rounded-lg bg-gray-200 dark:bg-gray-600 active:bg-gray-300 dark:active:bg-gray-500 text-gray-700 dark:text-gray-200"
+                        title="Reset pitch"
+                    >
+                        ↺
+                    </button>
+                </div>
+                {/* Mobile utility buttons */}
+                <div class="flex items-center justify-center gap-4 px-4 py-2 border-t border-gray-200 dark:border-gray-700">
                     <button
                         onClick={decreaseButtonSize}
-                        class="btn px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full text-xl shadow-xl dark:shadow-white/10 text-black dark:text-white"
+                        class="btn px-4 py-2 rounded-full bg-gray-200 dark:bg-gray-600 active:bg-gray-300 dark:active:bg-gray-500 text-xl text-black dark:text-white"
                     >
                         <FaMinus />
                     </button>
                     <button
+                        onClick={increaseButtonSize}
+                        class="btn px-4 py-2 rounded-full bg-gray-200 dark:bg-gray-600 active:bg-gray-300 dark:active:bg-gray-500 text-xl text-black dark:text-white"
+                    >
+                        <FaPlus />
+                    </button>
+                    <button
                         onClick={toggleDarkMode}
-                        class="btn px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full text-xl shadow-xl dark:shadow-white/10"
+                        class="btn px-4 py-2 rounded-full bg-gray-200 dark:bg-gray-600 active:bg-gray-300 dark:active:bg-gray-500 text-xl"
                     >
                         {isDark ? '🌞' : '🌙'}
                     </button>
@@ -211,7 +287,7 @@ export function App() {
                         sounds={faves}
                         sortMode={sortMode}
                         onPlay={playSound}
-                        currentAudio={currentAudio}
+                        currentlyPlayingPath={currentlyPlayingPath}
                         darkMode={isDark}
                         onFave={onFave}
                     />
@@ -226,10 +302,12 @@ export function App() {
                 )}
                 sortMode={sortMode}
                 onPlay={playSound}
-                currentAudio={currentAudio}
+                currentlyPlayingPath={currentlyPlayingPath}
                 darkMode={isDark}
                 onFave={onFave}
             />
+            {/* Bottom padding to prevent mobile sliders from occluding content */}
+            <div class="h-40 md:h-24" />
         </div>
     );
 }

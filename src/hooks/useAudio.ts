@@ -1,9 +1,20 @@
-import { useState, useRef, useCallback } from 'preact/hooks';
+import { useState, useRef, useEffect } from 'preact/hooks';
+import * as Tone from 'tone';
 import { Sound } from '../lib/types';
 
+// Retry configuration for resilience
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000;
+
+interface LoadedSound {
+    player: Tone.Player;
+    sound: Sound;
+}
+
 export function useAudio() {
-    const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
-    const [loadedSounds, setLoadedSounds] = useState<Record<string, HTMLAudioElement>>({});
+    const [currentPlayer, setCurrentPlayer] = useState<Tone.Player | null>(null);
+    const [currentlyPlayingPath, setCurrentlyPlayingPath] = useState<string | null>(null);
+    const [loadedSounds, setLoadedSounds] = useState<Record<string, LoadedSound>>({});
     const [loading, setLoading] = useState<boolean>(false);
     const [loadingProgress, setLoadingProgress] = useState<number>(0);
     const [loadedSoundsList, setLoadedSoundsList] = useState<Sound[]>([]);
@@ -13,45 +24,79 @@ export function useAudio() {
     // Pitch: semitones offset, -12 to +12 (one octave each direction)
     const [pitch, setPitch] = useState<number>(0);
 
-    // Use refs to always have current values in playSound
-    const speedRef = useRef(speed);
-    const pitchRef = useRef(pitch);
-    speedRef.current = speed;
-    pitchRef.current = pitch;
+    // Shared pitch shifter effect
+    const pitchShiftRef = useRef<Tone.PitchShift | null>(null);
 
-    // Convert semitones to multiplier: 2^(semitones/12)
-    const semitonesToRate = useCallback((semitones: number) => {
-        return Math.pow(2, semitones / 12);
+    // Initialize pitch shifter on mount
+    useEffect(() => {
+        pitchShiftRef.current = new Tone.PitchShift({
+            pitch: 0,
+            windowSize: 0.1,
+            delayTime: 0,
+        }).toDestination();
+
+        return () => {
+            pitchShiftRef.current?.dispose();
+        };
     }, []);
 
-    // Combined playback rate = speed × pitch adjustment
-    const getPlaybackRate = useCallback(() => {
-        return speedRef.current * semitonesToRate(pitchRef.current);
-    }, [semitonesToRate]);
+    // Update pitch shift when pitch OR speed changes
+    // We compensate for the pitch change caused by playbackRate
+    // so that "speed" is truly tempo-only
+    useEffect(() => {
+        if (pitchShiftRef.current) {
+            // Compensation: playbackRate of 2 = +12 semitones, so we subtract to neutralize
+            const speedPitchCompensation = -12 * Math.log2(speed);
+            pitchShiftRef.current.pitch = pitch + speedPitchCompensation;
+        }
+    }, [pitch, speed]);
 
-    const preloadSound = async (sound: Sound): Promise<HTMLAudioElement> => {
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+    const preloadSound = async (sound: Sound, retryCount = 0): Promise<LoadedSound> => {
         if (!sound.path) {
             throw new Error('Sound path is required');
         }
 
         if (loadedSounds[sound.path]) return loadedSounds[sound.path];
 
-        const audio = new Audio(`/api/audio${sound.path}`);
+        try {
+            const player = new Tone.Player({
+                url: `/api/audio${sound.path}`,
+                onload: () => {
+                    // Player loaded successfully
+                },
+            });
 
-        return new Promise<HTMLAudioElement>((resolve, reject) => {
-            audio.addEventListener('loadeddata', () => {
-                setLoadedSounds((prev) => ({ ...prev, [sound.path]: audio }));
-                setLoadedSoundsList((prev) => [...prev, sound]);
-                resolve(audio);
+            // Wait for the player to load
+            await Tone.loaded();
+
+            // Connect to pitch shifter
+            if (pitchShiftRef.current) {
+                player.connect(pitchShiftRef.current);
+            } else {
+                player.toDestination();
+            }
+
+            const loadedSound: LoadedSound = { player, sound };
+            setLoadedSounds((prev) => ({ ...prev, [sound.path]: loadedSound }));
+            setLoadedSoundsList((prev) => {
+                // Avoid duplicates
+                if (prev.some(s => s.path === sound.path)) return prev;
+                return [...prev, sound];
             });
-            audio.addEventListener('error', (e) => {
-                console.error(`Failed to load audio: ${sound.path}`, e);
-                reject(new Error(`Failed to load audio: ${sound.path}`));
-            });
-            setTimeout(() => {
-                reject(new Error(`Timeout loading audio: ${sound.path}`));
-            }, 10000);
-        });
+
+            return loadedSound;
+        } catch (error) {
+            console.error(`Failed to load audio (attempt ${retryCount + 1}): ${sound.path}`, error);
+
+            if (retryCount < MAX_RETRIES) {
+                await sleep(RETRY_DELAY * (retryCount + 1));
+                return preloadSound(sound, retryCount + 1);
+            }
+
+            throw new Error(`Failed to load audio after ${MAX_RETRIES} attempts: ${sound.path}`);
+        }
     };
 
     const playSound = async (sound: Sound): Promise<void> => {
@@ -60,18 +105,33 @@ export function useAudio() {
             return;
         }
 
-        if (currentAudio && !currentAudio.paused) {
-            currentAudio.pause();
-            currentAudio.currentTime = 0;
+        // Ensure audio context is started (required for user interaction)
+        if (Tone.context.state !== 'running') {
+            await Tone.start();
+        }
+
+        // Stop current player if playing
+        if (currentPlayer && currentPlayer.state === 'started') {
+            currentPlayer.stop();
         }
 
         try {
-            const audio = loadedSounds[sound.path] || (await preloadSound(sound));
-            audio.currentTime = 0;
-            audio.playbackRate = getPlaybackRate();
-            audio.preservesPitch = false; // Disable browser pitch correction
-            await audio.play();
-            setCurrentAudio(audio);
+            let loadedSound = loadedSounds[sound.path];
+            if (!loadedSound) {
+                loadedSound = await preloadSound(sound);
+            }
+
+            const { player } = loadedSound;
+            player.playbackRate = speed;
+
+            // Clear playing state when sound ends
+            player.onstop = () => {
+                setCurrentlyPlayingPath(null);
+            };
+
+            player.start();
+            setCurrentPlayer(player);
+            setCurrentlyPlayingPath(sound.path);
         } catch (error) {
             console.error('Error playing sound:', error);
             throw error;
@@ -88,22 +148,32 @@ export function useAudio() {
         setLoadedSoundsList([]);
         let loaded = 0;
         const errors: Error[] = [];
+        const totalSounds = sounds.filter(s => s?.type === 'sound' && s?.path).length;
 
         try {
-            await Promise.all(
-                sounds.map(async (sound) => {
-                    if (sound?.type === 'sound' && sound?.path) {
+            // Process in batches to avoid overwhelming the browser
+            const BATCH_SIZE = 5;
+            const soundsToLoad = sounds.filter(s => s?.type === 'sound' && s?.path);
+
+            for (let i = 0; i < soundsToLoad.length; i += BATCH_SIZE) {
+                const batch = soundsToLoad.slice(i, i + BATCH_SIZE);
+
+                await Promise.all(
+                    batch.map(async (sound) => {
                         try {
                             await preloadSound(sound);
                             loaded++;
-                            setLoadingProgress((loaded / sounds.length) * 100);
+                            setLoadingProgress((loaded / totalSounds) * 100);
                         } catch (error) {
                             errors.push(error as Error);
                             console.error(`Failed to preload ${sound.path}:`, error);
+                            // Still count as processed for progress
+                            loaded++;
+                            setLoadingProgress((loaded / totalSounds) * 100);
                         }
-                    }
-                }),
-            );
+                    }),
+                );
+            }
 
             if (errors.length > 0) {
                 console.warn(`${errors.length} sounds failed to preload`);
@@ -118,7 +188,7 @@ export function useAudio() {
         preloadSounds,
         loading,
         loadingProgress,
-        currentAudio,
+        currentlyPlayingPath,
         loadedSoundsList,
         speed,
         setSpeed,

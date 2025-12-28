@@ -8,7 +8,7 @@ export const SoundList = ({
     sounds,
     sortMode,
     onPlay,
-    currentAudio,
+    currentlyPlayingPath,
     onFave,
     buttonSize = 'lg',
     darkMode = false,
@@ -17,7 +17,7 @@ export const SoundList = ({
     sounds: Sound[];
     sortMode: string;
     onPlay: (sound: Sound) => void;
-    currentAudio: HTMLAudioElement | null;
+    currentlyPlayingPath: string | null;
     buttonSize?: 'xxs' | 'xs' | 'sm' | 'md' | 'lg';
     darkMode?: boolean;
     onFave: (sound: Sound) => void;
@@ -38,7 +38,7 @@ export const SoundList = ({
                     <SoundButton
                         sound={sound}
                         color={generateDistinguishableColors(sortedSounds.length, undefined, darkMode)[index]}
-                        isPlaying={Boolean(currentAudio?.src.includes(sound.path))}
+                        isPlaying={currentlyPlayingPath === sound.path}
                         onPlay={onPlay}
                         onFave={onFave}
                         buttonSize={buttonSize}
@@ -80,7 +80,7 @@ export const SoundList = ({
                                     onFave={onFave}
                                     sound={sound}
                                     color={categoryColors[categoryIndex]}
-                                    isPlaying={Boolean(currentAudio?.src.includes(sound.path))}
+                                    isPlaying={currentlyPlayingPath === sound.path}
                                     onPlay={onPlay}
                                     buttonSize={buttonSize}
                                     darkMode={darkMode}
