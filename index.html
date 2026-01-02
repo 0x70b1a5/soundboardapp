@@ -5,69 +5,6 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Soundboard</title>
         <link rel="icon" href="/favicon.ico" />
-        <style>
-            /* Slider styling: thin track, fat thumb for mobile */
-            .slider-mobile {
-                -webkit-appearance: none;
-                appearance: none;
-                height: 4px;
-                background: rgba(128, 128, 128, 0.3);
-                border-radius: 2px;
-            }
-            .slider-mobile::-webkit-slider-thumb {
-                -webkit-appearance: none;
-                appearance: none;
-                width: 28px;
-                height: 28px;
-                border-radius: 50%;
-                background: currentColor;
-                cursor: pointer;
-                border: 3px solid white;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-            }
-            .slider-mobile::-moz-range-thumb {
-                width: 28px;
-                height: 28px;
-                border-radius: 50%;
-                background: currentColor;
-                cursor: pointer;
-                border: 3px solid white;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-            }
-            .slider-mobile::-webkit-slider-runnable-track {
-                height: 4px;
-                border-radius: 2px;
-            }
-
-            /* Desktop slider: thinner */
-            .slider-thin {
-                -webkit-appearance: none;
-                appearance: none;
-                height: 3px;
-                background: rgba(128, 128, 128, 0.3);
-                border-radius: 2px;
-            }
-            .slider-thin::-webkit-slider-thumb {
-                -webkit-appearance: none;
-                appearance: none;
-                width: 16px;
-                height: 16px;
-                border-radius: 50%;
-                background: currentColor;
-                cursor: pointer;
-                border: 2px solid white;
-                box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-            }
-            .slider-thin::-moz-range-thumb {
-                width: 16px;
-                height: 16px;
-                border-radius: 50%;
-                background: currentColor;
-                cursor: pointer;
-                border: 2px solid white;
-                box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-            }
-        </style>
     </head>
     <body class="font-sans m-0 p-0 bg-white dark:bg-gray-900 transition-colors duration-200 dark:text-white min-h-screen">
         <div id="app" class="min-h-screen grow self-stretch"></div>

@@ -95,6 +95,13 @@ export function useAudio() {
         }
     }, [pitch, speed, pitchLock]);
 
+    // Update current player's playbackRate when speed changes (for real-time modification)
+    useEffect(() => {
+        if (currentPlayer && currentPlayer.state === 'started') {
+            currentPlayer.playbackRate = speed;
+        }
+    }, [speed, currentPlayer]);
+
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
     const preloadSound = async (sound: Sound, retryCount = 0): Promise<LoadedSound> => {
