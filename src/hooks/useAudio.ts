@@ -360,8 +360,18 @@ export function useAudio() {
         }
     };
 
+    // Stop current playback
+    const stopSound = () => {
+        if (currentPlayer && currentPlayer.state === 'started') {
+            currentPlayer.stop();
+        }
+        setCurrentlyPlayingPath(null);
+        playbackStateRef.current = null;
+    };
+
     return {
         playSound,
+        stopSound,
         preloadSounds,
         loading,
         loadingProgress,

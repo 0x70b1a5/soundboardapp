@@ -27,7 +27,7 @@ export function App() {
     }, []);
 
     const {
-        playSound, preloadSounds, loading, loadingProgress, currentlyPlayingPath, loadedSoundsList,
+        playSound, stopSound, preloadSounds, loading, loadingProgress, currentlyPlayingPath, loadedSoundsList,
         speed, setSpeed, pitch, setPitch,
         pitchLock, setPitchLock, reverb, setReverb, reverbWet, setReverbWet, reverse, toggleInstantReverse
     } = useAudio();
@@ -164,6 +164,16 @@ export function App() {
                         🔊 Reverb
                     </button>
                     <button
+                        onClick={stopSound}
+                        class={classNames("text-xs px-2 py-1 rounded-full font-medium transition-colors", {
+                            "bg-red-600 text-white": currentlyPlayingPath,
+                            "bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500": !currentlyPlayingPath,
+                        })}
+                        title="Stop playback"
+                    >
+                        ⏹ Stop
+                    </button>
+                    <button
                         onClick={toggleInstantReverse}
                         class={classNames("text-xs px-2 py-1 rounded-full font-medium transition-colors", {
                             "bg-rose-500 text-white": reverse,
@@ -246,10 +256,10 @@ export function App() {
             {/* Mobile sliders - fixed full-width bottom bars */}
             <div class="md:hidden fixed bottom-0 left-0 right-0 rounded-t-2xl py-2 z-20 flex flex-col bg-gray-100/95 dark:bg-gray-800/95 backdrop-blur shadow-[0_-4px_20px_rgba(0,0,0,0.15)]">
                 {/* Effect toggles - compact row */}
-                <div class="grid grid-cols-6 gap-1 px-1 border-b border-gray-200 dark:border-gray-700">
+                <div class="grid grid-cols-7 gap-1 px-1 border-b border-gray-200 dark:border-gray-700">
                     <button
                         onClick={handlePitchLockToggle}
-                        class={classNames("text-xs px-2 py-1 rounded-full font-medium transition-colors", {
+                        class={classNames("text-lg aspect-square self-stretch px-2 py-1 rounded-full font-medium transition-colors", {
                             "bg-amber-500 text-white": pitchLock,
                             "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300": !pitchLock,
                         })}
@@ -259,7 +269,7 @@ export function App() {
                     </button>
                     <button
                         onClick={() => setReverb(!reverb)}
-                        class={classNames("text-xs px-2 py-1 rounded-full font-medium transition-colors", {
+                        class={classNames("text-lg aspect-square self-stretch px-2 py-1 rounded-full font-medium transition-colors", {
                             "bg-indigo-500 text-white": reverb,
                             "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300": !reverb,
                         })}
@@ -268,12 +278,22 @@ export function App() {
                         🔊
                     </button>
                     <button
+                        onClick={stopSound}
+                        class={classNames("text-lg aspect-square self-stretch px-2 py-1 rounded-full font-medium transition-colors", {
+                            "bg-red-600 text-white": currentlyPlayingPath,
+                            "bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500": !currentlyPlayingPath,
+                        })}
+                        title="Stop"
+                    >
+                        ⏹
+                    </button>
+                    <button
                         onClick={toggleInstantReverse}
-                        class={classNames("text-xs px-2 py-1 rounded-full font-medium transition-colors", {
+                        class={classNames("text-lg aspect-square self-stretch px-2 py-1 rounded-full font-medium transition-colors", {
                             "bg-rose-500 text-white": reverse,
                             "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300": !reverse,
                         })}
-                        title="Instant reverse"
+                        title="Instant reverse (works mid-playback!)"
                     >
                         ⏪
                     </button>
