@@ -23,7 +23,7 @@ export const SoundList = ({
     onFave: (sound: Sound) => void;
     className?: string;
 }) => {
-    const gridClass = `h-full grow self-stretch max-w-screen flex flex-wrap gap-2`;
+    const gridClass = `h-full grow self-stretch max-w-screen flex flex-wrap gap-1 md:gap-2`;
 
     if (sortMode === 'alphabetical') {
         const sortedSounds = [...sounds].sort((a, b) => {

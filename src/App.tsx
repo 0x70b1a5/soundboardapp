@@ -244,7 +244,7 @@ export function App() {
             {/* Mobile sliders - fixed full-width bottom bars */}
             <div class="md:hidden fixed bottom-0 left-0 right-0 z-20 flex flex-col bg-gray-100/95 dark:bg-gray-800/95 backdrop-blur shadow-[0_-4px_20px_rgba(0,0,0,0.15)]">
                 {/* Effect toggles - compact row */}
-                <div class="flex items-center justify-center gap-1 px-2 py-1.5 border-b border-gray-200 dark:border-gray-700">
+                <div class="grid grid-cols-6 gap-1 px-1 border-b border-gray-200 dark:border-gray-700">
                     <button
                         onClick={() => setPitchLock(!pitchLock)}
                         class={classNames("text-xs px-2 py-1 rounded-full font-medium transition-colors", {
@@ -275,7 +275,6 @@ export function App() {
                     >
                         ⏪
                     </button>
-                    <span class="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
                     <button
                         onClick={decreaseButtonSize}
                         class="btn px-2 py-1 rounded-full bg-gray-200 dark:bg-gray-600 active:bg-gray-300 dark:active:bg-gray-500 text-sm text-black dark:text-white"
@@ -296,7 +295,7 @@ export function App() {
                     </button>
                 </div>
                 {/* Speed slider */}
-                <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center md:gap-1 gap-2 px-1 md:px-3 md:py-2 border-b border-gray-200 dark:border-gray-700">
                     <span class="text-sm font-bold text-gray-500 dark:text-gray-400">⏱</span>
                     <span class="text-xs font-mono text-gray-600 dark:text-gray-300 min-w-10 text-center">
                         {speed.toFixed(2)}×
@@ -320,7 +319,7 @@ export function App() {
                     </button>
                 </div>
                 {/* Pitch slider */}
-                <div class={classNames("flex items-center gap-2 px-3 py-2", { "border-b border-gray-200 dark:border-gray-700": reverb })}>
+                <div class={classNames("flex items-center md:gap-1 gap-2 px-1 md:px-3 md:py-2", { "border-b border-gray-200 dark:border-gray-700": reverb })}>
                     <span class="text-sm font-bold text-gray-500 dark:text-gray-400">♪</span>
                     <span class="text-xs font-mono text-gray-600 dark:text-gray-300 min-w-10 text-center">
                         {pitch > 0 ? '+' : ''}{pitch}st
@@ -345,7 +344,7 @@ export function App() {
                 </div>
                 {/* Reverb wet slider - only shown when reverb is on */}
                 {reverb && (
-                    <div class="flex items-center gap-2 px-3 py-2 bg-indigo-50/50 dark:bg-indigo-900/30">
+                    <div class="flex items-center md:gap-1 gap-2 px-1 md:px-3 md:py-2 bg-indigo-50/50 dark:bg-indigo-900/30">
                         <span class="text-sm font-bold text-indigo-500 dark:text-indigo-300">💧</span>
                         <span class="text-xs font-mono text-indigo-600 dark:text-indigo-300 min-w-10 text-center">
                             {Math.round(reverbWet * 100)}%
@@ -399,9 +398,8 @@ export function App() {
                 />
 
                 {faves?.length > 0 ? <>
-                    <h2 class="m-0 text-center text-lg font-bold">Favorites</h2>
                     <SoundList
-                        className="mb-4"
+                        className="mb-1"
                         buttonSize={buttonSize}
                         sounds={faves}
                         sortMode={sortMode}
