@@ -8,7 +8,18 @@ const RETRY_DELAY = 1000;
 
 interface LoadedSound {
     player: Tone.Player;
+    reversedPlayer: Tone.Player;
     sound: Sound;
+    duration: number;
+}
+
+// Playback tracking for instant reverse
+interface PlaybackState {
+    soundPath: string;
+    startTime: number;       // Tone.now() when playback started
+    startPosition: number;   // Position in the sound when playback started
+    isReversed: boolean;     // Current direction
+    speed: number;           // Speed at start (for position calculation)
 }
 
 export function useAudio() {
@@ -25,27 +36,31 @@ export function useAudio() {
     const [pitch, setPitch] = useState<number>(0);
 
     // Feature toggles
-    const [pitchLock, setPitchLock] = useState<boolean>(false); // When true, speed affects pitch (classic vinyl style)
+    const [pitchLock, setPitchLock] = useState<boolean>(false);
     const [reverb, setReverb] = useState<boolean>(false);
-    const [reverbWet, setReverbWet] = useState<number>(0.4); // 0-1 wet/dry mix
+    const [reverbWet, setReverbWet] = useState<number>(0.4);
     const [reverse, setReverse] = useState<boolean>(false);
 
     // Shared effects chain
     const pitchShiftRef = useRef<Tone.PitchShift | null>(null);
     const reverbRef = useRef<Tone.Reverb | null>(null);
 
-    // Track connected players for reconnection when effects change
-    const connectedPlayersRef = useRef<Set<Tone.Player>>(new Set());
+    // Playback state tracking for instant reverse
+    const playbackStateRef = useRef<PlaybackState | null>(null);
+    const loadedSoundsRef = useRef<Record<string, LoadedSound>>({});
+
+    // Keep loadedSoundsRef in sync with state
+    useEffect(() => {
+        loadedSoundsRef.current = loadedSounds;
+    }, [loadedSounds]);
 
     // Initialize effects on mount
     useEffect(() => {
-        // Create reverb (but bypass by default)
         reverbRef.current = new Tone.Reverb({
             decay: 2.5,
             wet: 0.4,
         }).toDestination();
 
-        // Create pitch shifter, connect to reverb
         pitchShiftRef.current = new Tone.PitchShift({
             pitch: 0,
             windowSize: 0.1,
@@ -61,15 +76,10 @@ export function useAudio() {
     // Update effect chain when reverb toggle changes
     useEffect(() => {
         if (!pitchShiftRef.current || !reverbRef.current) return;
-
-        // Disconnect pitch shifter from current destination
         pitchShiftRef.current.disconnect();
-
         if (reverb) {
-            // Route through reverb
             pitchShiftRef.current.connect(reverbRef.current);
         } else {
-            // Direct to destination
             pitchShiftRef.current.toDestination();
         }
     }, [reverb]);
@@ -85,20 +95,35 @@ export function useAudio() {
     useEffect(() => {
         if (pitchShiftRef.current) {
             if (pitchLock) {
-                // Classic mode: speed affects pitch naturally, only apply user's pitch offset
                 pitchShiftRef.current.pitch = pitch;
             } else {
-                // Independent mode: compensate for speed's pitch change
                 const speedPitchCompensation = -12 * Math.log2(speed);
                 pitchShiftRef.current.pitch = pitch + speedPitchCompensation;
             }
         }
     }, [pitch, speed, pitchLock]);
 
-    // Update current player's playbackRate when speed changes (for real-time modification)
+    // Update current player's playbackRate when speed changes
     useEffect(() => {
         if (currentPlayer && currentPlayer.state === 'started') {
             currentPlayer.playbackRate = speed;
+            // Update playback state tracking
+            if (playbackStateRef.current) {
+                // Recalculate position before speed change, then update
+                const now = Tone.now();
+                const elapsed = now - playbackStateRef.current.startTime;
+                const positionDelta = elapsed * playbackStateRef.current.speed;
+                const newPosition = playbackStateRef.current.isReversed
+                    ? playbackStateRef.current.startPosition - positionDelta
+                    : playbackStateRef.current.startPosition + positionDelta;
+
+                playbackStateRef.current = {
+                    ...playbackStateRef.current,
+                    startTime: now,
+                    startPosition: newPosition,
+                    speed: speed,
+                };
+            }
         }
     }, [speed, currentPlayer]);
 
@@ -112,28 +137,51 @@ export function useAudio() {
         if (loadedSounds[sound.path]) return loadedSounds[sound.path];
 
         try {
+            // Create forward player
             const player = new Tone.Player({
                 url: `/api/audio${sound.path}`,
-                onload: () => {
-                    // Player loaded successfully
-                },
             });
 
             // Wait for the player to load
             await Tone.loaded();
 
-            // Connect to pitch shifter
-            if (pitchShiftRef.current) {
-                player.connect(pitchShiftRef.current);
-                connectedPlayersRef.current.add(player);
-            } else {
-                player.toDestination();
+            // Create reversed player with a COPY of the buffer (not shared reference)
+            // We need to clone the buffer data to avoid the reverse operation affecting both
+            const originalBuffer = player.buffer.get();
+            if (!originalBuffer) {
+                throw new Error('Failed to get audio buffer');
             }
 
-            const loadedSound: LoadedSound = { player, sound };
+            // Create a new AudioBuffer with the same properties
+            const reversedAudioBuffer = new AudioBuffer({
+                numberOfChannels: originalBuffer.numberOfChannels,
+                length: originalBuffer.length,
+                sampleRate: originalBuffer.sampleRate,
+            });
+
+            // Copy channel data
+            for (let channel = 0; channel < originalBuffer.numberOfChannels; channel++) {
+                const channelData = originalBuffer.getChannelData(channel);
+                reversedAudioBuffer.copyToChannel(channelData, channel);
+            }
+
+            const reversedPlayer = new Tone.Player(reversedAudioBuffer);
+            reversedPlayer.reverse = true;
+
+            // Connect both to pitch shifter
+            if (pitchShiftRef.current) {
+                player.connect(pitchShiftRef.current);
+                reversedPlayer.connect(pitchShiftRef.current);
+            } else {
+                player.toDestination();
+                reversedPlayer.toDestination();
+            }
+
+            const duration = player.buffer.duration;
+            const loadedSound: LoadedSound = { player, reversedPlayer, sound, duration };
+
             setLoadedSounds((prev) => ({ ...prev, [sound.path]: loadedSound }));
             setLoadedSoundsList((prev) => {
-                // Avoid duplicates
                 if (prev.some(s => s.path === sound.path)) return prev;
                 return [...prev, sound];
             });
@@ -151,13 +199,82 @@ export function useAudio() {
         }
     };
 
+    // Calculate current playhead position (0 to duration)
+    const getCurrentPosition = (): number | null => {
+        if (!playbackStateRef.current) return null;
+
+        const state = playbackStateRef.current;
+        const now = Tone.now();
+        const elapsed = now - state.startTime;
+        const positionDelta = elapsed * state.speed;
+
+        if (state.isReversed) {
+            return Math.max(0, state.startPosition - positionDelta);
+        } else {
+            const loaded = loadedSoundsRef.current[state.soundPath];
+            const duration = loaded?.duration || 0;
+            return Math.min(duration, state.startPosition + positionDelta);
+        }
+    };
+
+    // Instant reverse: flip direction mid-playback
+    const toggleInstantReverse = () => {
+        const state = playbackStateRef.current;
+        if (!state || !currentPlayer || currentPlayer.state !== 'started') {
+            // Not playing, just toggle the flag for next play
+            setReverse(!reverse);
+            return;
+        }
+
+        const loaded = loadedSoundsRef.current[state.soundPath];
+        if (!loaded) return;
+
+        const currentPos = getCurrentPosition();
+        if (currentPos === null) return;
+
+        const { duration, player, reversedPlayer } = loaded;
+        const newIsReversed = !state.isReversed;
+
+        // Remove onstop handler before stopping to prevent it from clearing our state
+        currentPlayer.onstop = () => {};
+        currentPlayer.stop();
+
+        // Calculate offset for the other player
+        // In reversed buffer: position 0 = end of original, position D = start of original
+        // So to play from original position P in reversed buffer, start at (D - P)
+        const newPlayer = newIsReversed ? reversedPlayer : player;
+        let offset = newIsReversed ? (duration - currentPos) : currentPos;
+
+        // Clamp offset to valid range (tiny epsilon to avoid edge issues)
+        offset = Math.max(0.001, Math.min(duration - 0.001, offset));
+
+        // Configure and start new player
+        newPlayer.playbackRate = speed;
+        newPlayer.onstop = () => {
+            setCurrentlyPlayingPath(null);
+            playbackStateRef.current = null;
+        };
+
+        newPlayer.start(undefined, offset);
+        setCurrentPlayer(newPlayer);
+        setReverse(newIsReversed);
+
+        // Update tracking state
+        playbackStateRef.current = {
+            soundPath: state.soundPath,
+            startTime: Tone.now(),
+            startPosition: currentPos,
+            isReversed: newIsReversed,
+            speed: speed,
+        };
+    };
+
     const playSound = async (sound: Sound): Promise<void> => {
         if (!sound?.path) {
             console.error('Invalid sound object', sound);
             return;
         }
 
-        // Ensure audio context is started (required for user interaction)
         if (Tone.context.state !== 'running') {
             await Tone.start();
         }
@@ -173,18 +290,27 @@ export function useAudio() {
                 loadedSound = await preloadSound(sound);
             }
 
-            const { player } = loadedSound;
-            player.playbackRate = speed;
-            player.reverse = reverse;
+            const { player, reversedPlayer, duration } = loadedSound;
+            const activePlayer = reverse ? reversedPlayer : player;
 
-            // Clear playing state when sound ends
-            player.onstop = () => {
+            activePlayer.playbackRate = speed;
+            activePlayer.onstop = () => {
                 setCurrentlyPlayingPath(null);
+                playbackStateRef.current = null;
             };
 
-            player.start();
-            setCurrentPlayer(player);
+            activePlayer.start();
+            setCurrentPlayer(activePlayer);
             setCurrentlyPlayingPath(sound.path);
+
+            // Initialize playback tracking
+            playbackStateRef.current = {
+                soundPath: sound.path,
+                startTime: Tone.now(),
+                startPosition: reverse ? duration : 0,
+                isReversed: reverse,
+                speed: speed,
+            };
         } catch (error) {
             console.error('Error playing sound:', error);
             throw error;
@@ -204,14 +330,13 @@ export function useAudio() {
         const totalSounds = sounds.filter(s => s?.type === 'sound' && s?.path).length;
 
         try {
-            // Process in batches to avoid overwhelming the browser
             const BATCH_SIZE = 5;
             const soundsToLoad = sounds.filter(s => s?.type === 'sound' && s?.path);
 
             for (let i = 0; i < soundsToLoad.length; i += BATCH_SIZE) {
                 const batch = soundsToLoad.slice(i, i + BATCH_SIZE);
 
-                await Promise.all(
+            await Promise.all(
                     batch.map(async (sound) => {
                         try {
                             await preloadSound(sound);
@@ -220,12 +345,11 @@ export function useAudio() {
                         } catch (error) {
                             errors.push(error as Error);
                             console.error(`Failed to preload ${sound.path}:`, error);
-                            // Still count as processed for progress
                             loaded++;
                             setLoadingProgress((loaded / totalSounds) * 100);
-                        }
-                    }),
-                );
+                    }
+                }),
+            );
             }
 
             if (errors.length > 0) {
@@ -254,6 +378,6 @@ export function useAudio() {
         reverbWet,
         setReverbWet,
         reverse,
-        setReverse,
+        toggleInstantReverse,
     };
 }

@@ -29,7 +29,7 @@ export function App() {
     const {
         playSound, preloadSounds, loading, loadingProgress, currentlyPlayingPath, loadedSoundsList,
         speed, setSpeed, pitch, setPitch,
-        pitchLock, setPitchLock, reverb, setReverb, reverbWet, setReverbWet, reverse, setReverse
+        pitchLock, setPitchLock, reverb, setReverb, reverbWet, setReverbWet, reverse, toggleInstantReverse
     } = useAudio();
 
     // Reset pitch when pitchLock is enabled
@@ -164,12 +164,12 @@ export function App() {
                         🔊 Reverb
                     </button>
                     <button
-                        onClick={() => setReverse(!reverse)}
+                        onClick={toggleInstantReverse}
                         class={classNames("text-xs px-2 py-1 rounded-full font-medium transition-colors", {
                             "bg-rose-500 text-white": reverse,
                             "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500": !reverse,
                         })}
-                        title="Play in reverse"
+                        title="Instant reverse (works mid-playback!)"
                     >
                         ⏪ Reverse
                     </button>
@@ -268,12 +268,12 @@ export function App() {
                         🔊
                     </button>
                     <button
-                        onClick={() => setReverse(!reverse)}
+                        onClick={toggleInstantReverse}
                         class={classNames("text-xs px-2 py-1 rounded-full font-medium transition-colors", {
                             "bg-rose-500 text-white": reverse,
                             "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300": !reverse,
                         })}
-                        title="Reverse"
+                        title="Instant reverse"
                     >
                         ⏪
                     </button>
