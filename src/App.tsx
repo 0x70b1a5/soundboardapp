@@ -1,8 +1,7 @@
 import { h } from 'preact';
 import { FaMinus, FaPlus } from 'react-icons/fa';
-import { useState, useEffect, useMemo } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
 import { SoundList } from './components/SoundList';
-import { LoadingBar } from './components/LoadingBar';
 import { Slider } from './components/Slider';
 import { useAudio } from './hooks/useAudio';
 import { SortMode, Sound } from './lib/types';
@@ -27,7 +26,7 @@ export function App() {
     }, []);
 
     const {
-        playSound, stopSound, preloadSounds, loading, loadingProgress, currentlyPlayingPath, loadedSoundsList,
+        playSound, stopSound, warmSounds, loadingPath, currentlyPlayingPath,
         speed, setSpeed, pitch, setPitch,
         pitchLock, setPitchLock, reverb, setReverb, reverbWet, setReverbWet, reverse, toggleInstantReverse
     } = useAudio();
@@ -39,15 +38,6 @@ export function App() {
         }
         setPitchLock(!pitchLock);
     };
-
-    // Merge sounds metadata with loaded status for progressive display
-    const displaySounds = useMemo(() => {
-        const loadedPaths = new Set(loadedSoundsList.map(s => s.path));
-        return sounds.map(sound => ({
-            ...sound,
-            isLoaded: loadedPaths.has(sound.path),
-        }));
-    }, [sounds, loadedSoundsList]);
 
     useEffect(() => {
         fetchSounds();
@@ -89,20 +79,27 @@ export function App() {
             }));
 
             setSounds(processedSounds);
-            preloadSounds(processedSounds);
+            const favePaths = new Set(faves.map((f) => f.path));
+            warmSounds([
+                ...processedSounds.filter((s: Sound) => favePaths.has(s.path)),
+                ...processedSounds.filter((s: Sound) => !favePaths.has(s.path)),
+            ]);
         } catch (error) {
             console.error('Error fetching sounds:', error);
         }
     };
 
     const onFave = (sound: Sound) => {
-        if (faves.includes(sound)) {
-            setFaves(faves.filter(s => s.name !== sound.name));
-        } else {
-            setFaves([...faves, sound]);
+        const alreadyFaved = faves.some((s) => s.name === sound.name);
+        const next = alreadyFaved
+            ? faves.filter((s) => s.name !== sound.name)
+            : [...faves, sound];
+        setFaves(next);
+        localStorage.setItem('sound-theo_faves', JSON.stringify(next));
+        if (!alreadyFaved) {
+            warmSounds([sound], true);
         }
-        localStorage.setItem('sound-theo_faves', JSON.stringify(faves));
-    }
+    };
 
     const increaseButtonSize = () => {
         setButtonSize(buttonSize === 'xxs' ? 'xs' : buttonSize === 'xs' ? 'sm' : buttonSize === 'sm' ? 'md' : buttonSize === 'md' ? 'lg' : 'xxs');
@@ -420,21 +417,22 @@ export function App() {
                         sortMode={sortMode}
                         onPlay={playSound}
                         currentlyPlayingPath={currentlyPlayingPath}
+                        loadingPath={loadingPath}
                         darkMode={isDark}
                         onFave={onFave}
                     />
                 </> : <p class="m-0 text-center text-lg opacity-50">long press to favorite</p>}
             </div>
 
-            {loading && <LoadingBar progress={loadingProgress} />}
             <SoundList
                 buttonSize={buttonSize}
-                sounds={displaySounds.filter(s =>
+                sounds={sounds.filter(s =>
                     s.name.toLowerCase().includes(searchTerm.toLowerCase())
                 )}
                 sortMode={sortMode}
                 onPlay={playSound}
                 currentlyPlayingPath={currentlyPlayingPath}
+                loadingPath={loadingPath}
                 darkMode={isDark}
                 onFave={onFave}
             />

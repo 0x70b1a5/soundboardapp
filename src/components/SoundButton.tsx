@@ -9,6 +9,7 @@ export const SoundButton = ({
     sound,
     color,
     isPlaying = false,
+    isLoading = false,
     onPlay,
     onFave,
     buttonSize = 'md',
@@ -17,6 +18,7 @@ export const SoundButton = ({
     sound: Sound;
     color: string;
     isPlaying: boolean;
+    isLoading?: boolean;
     onPlay: (sound: Sound) => void;
     onFave: (sound: Sound) => void;
     buttonSize?: 'xxs' | 'xs' | 'sm' | 'md' | 'lg';
@@ -29,8 +31,6 @@ export const SoundButton = ({
         .split('/')
         .pop()
         ?.replace(/\.\w+$/, '');
-
-    const isLoaded = sound.isLoaded !== false; // treat undefined as loaded for backwards compat
 
     const handlePressStart = useCallback(() => {
         isLongPress.current = false;
@@ -53,10 +53,10 @@ export const SoundButton = ({
 
     const handleClick = useCallback(() => {
         // Only play if it wasn't a long press
-        if (!isLongPress.current && isLoaded) {
+        if (!isLongPress.current && !isLoading) {
             onPlay(sound);
         }
-    }, [sound, onPlay, isLoaded]);
+    }, [sound, onPlay, isLoading]);
 
     return (
         <button
@@ -67,7 +67,7 @@ export const SoundButton = ({
                 'px-6 py-3 rounded-full text-lg': buttonSize === 'md',
                 'px-8 py-4 rounded-full text-xl': buttonSize === 'lg',
                 'filter invert': isPlaying,
-                'opacity-40 cursor-wait': !isLoaded,
+                'opacity-60 cursor-wait animate-pulse': isLoading,
             })}
             style={{ backgroundColor: color }}
             onClick={handleClick}
@@ -77,7 +77,7 @@ export const SoundButton = ({
             onTouchStart={handlePressStart}
             onTouchEnd={handlePressEnd}
             onTouchCancel={handlePressEnd}
-            disabled={!isLoaded}
+            disabled={isLoading}
             data-sound={sound.name}
             data-path={sound.path}
         >

@@ -30,5 +30,9 @@
         "typescript": "^5.3.3",
         "unocss": "^66.5.11",
         "vite": "^7.3.0"
+    },
+    "allowScripts": {
+        "esbuild@0.27.2": true,
+        "fsevents@2.3.3": true
     }
 }

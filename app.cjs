@@ -35,8 +35,8 @@ app.get('/api/sounds', (_req, res) => {
 
 // Dedicated endpoint for serving audio files
 app.get('/api/audio/:path(*)', (req, res) => {
-    // console.log('Audio request for:', req.params.path);
     const audioPath = path.join(soundboardDir, req.params.path);
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
     res.sendFile(audioPath, (err) => {
         if (err) {
             console.error(err);

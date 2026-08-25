@@ -9,6 +9,7 @@ export const SoundList = ({
     sortMode,
     onPlay,
     currentlyPlayingPath,
+    loadingPath = null,
     onFave,
     buttonSize = 'lg',
     darkMode = false,
@@ -18,6 +19,7 @@ export const SoundList = ({
     sortMode: string;
     onPlay: (sound: Sound) => void;
     currentlyPlayingPath: string | null;
+    loadingPath?: string | null;
     buttonSize?: 'xxs' | 'xs' | 'sm' | 'md' | 'lg';
     darkMode?: boolean;
     onFave: (sound: Sound) => void;
@@ -39,6 +41,7 @@ export const SoundList = ({
                         sound={sound}
                         color={generateDistinguishableColors(sortedSounds.length, undefined, darkMode)[index]}
                         isPlaying={currentlyPlayingPath === sound.path}
+                        isLoading={loadingPath === sound.path}
                         onPlay={onPlay}
                         onFave={onFave}
                         buttonSize={buttonSize}
@@ -81,6 +84,7 @@ export const SoundList = ({
                                     sound={sound}
                                     color={categoryColors[categoryIndex]}
                                     isPlaying={currentlyPlayingPath === sound.path}
+                                    isLoading={loadingPath === sound.path}
                                     onPlay={onPlay}
                                     buttonSize={buttonSize}
                                     darkMode={darkMode}

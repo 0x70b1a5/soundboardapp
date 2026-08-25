@@ -2,59 +2,64 @@ import { useState, useRef, useEffect } from 'preact/hooks';
 import * as Tone from 'tone';
 import { Sound } from '../lib/types';
 
-// Retry configuration for resilience
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 
 interface LoadedSound {
     player: Tone.Player;
-    reversedPlayer: Tone.Player;
+    reversedPlayer: Tone.Player | null;
     sound: Sound;
     duration: number;
 }
 
-// Playback tracking for instant reverse
 interface PlaybackState {
     soundPath: string;
-    startTime: number;       // Tone.now() when playback started
-    startPosition: number;   // Position in the sound when playback started
-    isReversed: boolean;     // Current direction
-    speed: number;           // Speed at start (for position calculation)
+    startTime: number;
+    startPosition: number;
+    isReversed: boolean;
+    speed: number;
 }
+
+const waitForIdle = () =>
+    new Promise<void>((resolve) => {
+        if (typeof requestIdleCallback === 'function') {
+            requestIdleCallback(() => resolve(), { timeout: 1500 });
+        } else {
+            setTimeout(resolve, 32);
+        }
+    });
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function useAudio() {
     const [currentPlayer, setCurrentPlayer] = useState<Tone.Player | null>(null);
     const [currentlyPlayingPath, setCurrentlyPlayingPath] = useState<string | null>(null);
-    const [loadedSounds, setLoadedSounds] = useState<Record<string, LoadedSound>>({});
-    const [loading, setLoading] = useState<boolean>(false);
-    const [loadingProgress, setLoadingProgress] = useState<number>(0);
-    const [loadedSoundsList, setLoadedSoundsList] = useState<Sound[]>([]);
+    const [loadingPath, setLoadingPath] = useState<string | null>(null);
 
-    // Speed: 1.0 = normal, 0.5 = half speed, 2.0 = double speed
     const [speed, setSpeed] = useState<number>(1.0);
-    // Pitch: semitones offset, -12 to +12 (one octave each direction)
     const [pitch, setPitch] = useState<number>(0);
 
-    // Feature toggles
     const [pitchLock, setPitchLock] = useState<boolean>(false);
     const [reverb, setReverb] = useState<boolean>(false);
     const [reverbWet, setReverbWet] = useState<number>(0.4);
     const [reverse, setReverse] = useState<boolean>(false);
 
-    // Shared effects chain
     const pitchShiftRef = useRef<Tone.PitchShift | null>(null);
     const reverbRef = useRef<Tone.Reverb | null>(null);
 
-    // Playback state tracking for instant reverse
     const playbackStateRef = useRef<PlaybackState | null>(null);
     const loadedSoundsRef = useRef<Record<string, LoadedSound>>({});
+    const inflightRef = useRef<Map<string, Promise<LoadedSound>>>(new Map());
+    const currentPlayerRef = useRef<Tone.Player | null>(null);
+    const playRequestIdRef = useRef(0);
+    const warmupQueueRef = useRef<Sound[]>([]);
+    const warmupRunningRef = useRef(false);
+    const warmupCancelledRef = useRef(false);
 
-    // Keep loadedSoundsRef in sync with state
     useEffect(() => {
-        loadedSoundsRef.current = loadedSounds;
-    }, [loadedSounds]);
+        currentPlayerRef.current = currentPlayer;
+    }, [currentPlayer]);
 
-    // Initialize effects on mount
     useEffect(() => {
         reverbRef.current = new Tone.Reverb({
             decay: 2.5,
@@ -68,12 +73,12 @@ export function useAudio() {
         });
 
         return () => {
+            warmupCancelledRef.current = true;
             pitchShiftRef.current?.dispose();
             reverbRef.current?.dispose();
         };
     }, []);
 
-    // Update effect chain when reverb toggle changes
     useEffect(() => {
         if (!pitchShiftRef.current || !reverbRef.current) return;
         pitchShiftRef.current.disconnect();
@@ -84,14 +89,12 @@ export function useAudio() {
         }
     }, [reverb]);
 
-    // Update reverb wetness
     useEffect(() => {
         if (reverbRef.current) {
             reverbRef.current.wet.value = reverbWet;
         }
     }, [reverbWet]);
 
-    // Update pitch shift when pitch, speed, or pitchLock changes
     useEffect(() => {
         if (pitchShiftRef.current) {
             if (pitchLock) {
@@ -103,13 +106,10 @@ export function useAudio() {
         }
     }, [pitch, speed, pitchLock]);
 
-    // Update current player's playbackRate when speed changes
     useEffect(() => {
         if (currentPlayer && currentPlayer.state === 'started') {
             currentPlayer.playbackRate = speed;
-            // Update playback state tracking
             if (playbackStateRef.current) {
-                // Recalculate position before speed change, then update
                 const now = Tone.now();
                 const elapsed = now - playbackStateRef.current.startTime;
                 const positionDelta = elapsed * playbackStateRef.current.speed;
@@ -127,79 +127,134 @@ export function useAudio() {
         }
     }, [speed, currentPlayer]);
 
-    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    const connectPlayer = (player: Tone.Player) => {
+        if (pitchShiftRef.current) {
+            player.connect(pitchShiftRef.current);
+        } else {
+            player.toDestination();
+        }
+    };
 
-    const preloadSound = async (sound: Sound, retryCount = 0): Promise<LoadedSound> => {
+    const ensureReversedPlayer = (loaded: LoadedSound): Tone.Player => {
+        if (loaded.reversedPlayer) return loaded.reversedPlayer;
+
+        const originalBuffer = loaded.player.buffer.get();
+        if (!originalBuffer) {
+            throw new Error('Failed to get audio buffer');
+        }
+
+        const reversedAudioBuffer = new AudioBuffer({
+            numberOfChannels: originalBuffer.numberOfChannels,
+            length: originalBuffer.length,
+            sampleRate: originalBuffer.sampleRate,
+        });
+
+        for (let channel = 0; channel < originalBuffer.numberOfChannels; channel++) {
+            reversedAudioBuffer.copyToChannel(originalBuffer.getChannelData(channel), channel);
+        }
+
+        const reversedPlayer = new Tone.Player(reversedAudioBuffer);
+        reversedPlayer.reverse = true;
+        connectPlayer(reversedPlayer);
+        loaded.reversedPlayer = reversedPlayer;
+        return reversedPlayer;
+    };
+
+    const preloadSound = async (sound: Sound): Promise<LoadedSound> => {
         if (!sound.path) {
             throw new Error('Sound path is required');
         }
 
-        if (loadedSounds[sound.path]) return loadedSounds[sound.path];
+        const existing = loadedSoundsRef.current[sound.path];
+        if (existing) return existing;
 
-        try {
-            // Create forward player
-            const player = new Tone.Player({
-                url: `/api/audio${sound.path}`,
-            });
+        const inflight = inflightRef.current.get(sound.path);
+        if (inflight) return inflight;
 
-            // Wait for the player to load
-            await Tone.loaded();
+        const loadPromise = (async (): Promise<LoadedSound> => {
+            for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    const player = new Tone.Player();
+                    await player.load(`/api/audio${sound.path}`);
+                    connectPlayer(player);
 
-            // Create reversed player with a COPY of the buffer (not shared reference)
-            // We need to clone the buffer data to avoid the reverse operation affecting both
-            const originalBuffer = player.buffer.get();
-            if (!originalBuffer) {
-                throw new Error('Failed to get audio buffer');
+                    const loadedSound: LoadedSound = {
+                        player,
+                        reversedPlayer: null,
+                        sound,
+                        duration: player.buffer.duration,
+                    };
+                    loadedSoundsRef.current[sound.path] = loadedSound;
+                    return loadedSound;
+                } catch (error) {
+                    console.error(`Failed to load audio (attempt ${attempt + 1}): ${sound.path}`, error);
+                    if (attempt < MAX_RETRIES) {
+                        await sleep(RETRY_DELAY * (attempt + 1));
+                    }
+                }
             }
-
-            // Create a new AudioBuffer with the same properties
-            const reversedAudioBuffer = new AudioBuffer({
-                numberOfChannels: originalBuffer.numberOfChannels,
-                length: originalBuffer.length,
-                sampleRate: originalBuffer.sampleRate,
-            });
-
-            // Copy channel data
-            for (let channel = 0; channel < originalBuffer.numberOfChannels; channel++) {
-                const channelData = originalBuffer.getChannelData(channel);
-                reversedAudioBuffer.copyToChannel(channelData, channel);
-            }
-
-            const reversedPlayer = new Tone.Player(reversedAudioBuffer);
-            reversedPlayer.reverse = true;
-
-            // Connect both to pitch shifter
-            if (pitchShiftRef.current) {
-                player.connect(pitchShiftRef.current);
-                reversedPlayer.connect(pitchShiftRef.current);
-            } else {
-                player.toDestination();
-                reversedPlayer.toDestination();
-            }
-
-            const duration = player.buffer.duration;
-            const loadedSound: LoadedSound = { player, reversedPlayer, sound, duration };
-
-            setLoadedSounds((prev) => ({ ...prev, [sound.path]: loadedSound }));
-            setLoadedSoundsList((prev) => {
-                if (prev.some(s => s.path === sound.path)) return prev;
-                return [...prev, sound];
-            });
-
-            return loadedSound;
-        } catch (error) {
-            console.error(`Failed to load audio (attempt ${retryCount + 1}): ${sound.path}`, error);
-
-            if (retryCount < MAX_RETRIES) {
-                await sleep(RETRY_DELAY * (retryCount + 1));
-                return preloadSound(sound, retryCount + 1);
-            }
-
             throw new Error(`Failed to load audio after ${MAX_RETRIES} attempts: ${sound.path}`);
+        })();
+
+        inflightRef.current.set(sound.path, loadPromise);
+        try {
+            return await loadPromise;
+        } finally {
+            inflightRef.current.delete(sound.path);
         }
     };
 
-    // Calculate current playhead position (0 to duration)
+    const pumpWarm = async () => {
+        if (warmupRunningRef.current) return;
+        warmupRunningRef.current = true;
+
+        try {
+            while (warmupQueueRef.current.length && !warmupCancelledRef.current) {
+                const sound = warmupQueueRef.current.shift();
+                if (!sound?.path || sound.type !== 'sound') continue;
+                if (loadedSoundsRef.current[sound.path] || inflightRef.current.has(sound.path)) continue;
+
+                await waitForIdle();
+                if (warmupCancelledRef.current) break;
+
+                try {
+                    await preloadSound(sound);
+                } catch (error) {
+                    console.error(`Failed to warm ${sound.path}:`, error);
+                }
+            }
+        } finally {
+            warmupRunningRef.current = false;
+        }
+
+        if (warmupQueueRef.current.length && !warmupCancelledRef.current) {
+            void pumpWarm();
+        }
+    };
+
+    const warmSounds = (sounds: Sound[], front = false) => {
+        if (!Array.isArray(sounds)) {
+            console.error('Invalid sounds array', sounds);
+            return;
+        }
+
+        const queued = new Set(warmupQueueRef.current.map((s) => s.path));
+        const unique = sounds.filter((s) => {
+            if (!s?.path || s.type !== 'sound') return false;
+            if (queued.has(s.path) || loadedSoundsRef.current[s.path]) return false;
+            queued.add(s.path);
+            return true;
+        });
+
+        if (front) {
+            warmupQueueRef.current.unshift(...unique);
+        } else {
+            warmupQueueRef.current.push(...unique);
+        }
+
+        void pumpWarm();
+    };
+
     const getCurrentPosition = (): number | null => {
         if (!playbackStateRef.current) return null;
 
@@ -217,11 +272,9 @@ export function useAudio() {
         }
     };
 
-    // Instant reverse: flip direction mid-playback
     const toggleInstantReverse = () => {
         const state = playbackStateRef.current;
         if (!state || !currentPlayer || currentPlayer.state !== 'started') {
-            // Not playing, just toggle the flag for next play
             setReverse(!reverse);
             return;
         }
@@ -232,23 +285,24 @@ export function useAudio() {
         const currentPos = getCurrentPosition();
         if (currentPos === null) return;
 
-        const { duration, player, reversedPlayer } = loaded;
+        let reversedPlayer: Tone.Player;
+        try {
+            reversedPlayer = ensureReversedPlayer(loaded);
+        } catch (error) {
+            console.error('Failed to build reversed buffer', error);
+            return;
+        }
+
+        const { duration, player } = loaded;
         const newIsReversed = !state.isReversed;
 
-        // Remove onstop handler before stopping to prevent it from clearing our state
         currentPlayer.onstop = () => {};
         currentPlayer.stop();
 
-        // Calculate offset for the other player
-        // In reversed buffer: position 0 = end of original, position D = start of original
-        // So to play from original position P in reversed buffer, start at (D - P)
         const newPlayer = newIsReversed ? reversedPlayer : player;
-        let offset = newIsReversed ? (duration - currentPos) : currentPos;
-
-        // Clamp offset to valid range (tiny epsilon to avoid edge issues)
+        let offset = newIsReversed ? duration - currentPos : currentPos;
         offset = Math.max(0.001, Math.min(duration - 0.001, offset));
 
-        // Configure and start new player
         newPlayer.playbackRate = speed;
         newPlayer.onstop = () => {
             setCurrentlyPlayingPath(null);
@@ -256,10 +310,10 @@ export function useAudio() {
         };
 
         newPlayer.start(undefined, offset);
+        currentPlayerRef.current = newPlayer;
         setCurrentPlayer(newPlayer);
         setReverse(newIsReversed);
 
-        // Update tracking state
         playbackStateRef.current = {
             soundPath: state.soundPath,
             startTime: Tone.now(),
@@ -275,23 +329,28 @@ export function useAudio() {
             return;
         }
 
+        const requestId = ++playRequestIdRef.current;
+
         if (Tone.context.state !== 'running') {
             await Tone.start();
         }
 
-        // Stop current player if playing
-        if (currentPlayer && currentPlayer.state === 'started') {
-            currentPlayer.stop();
+        const playing = currentPlayerRef.current;
+        if (playing && playing.state === 'started') {
+            playing.stop();
+        }
+
+        const alreadyLoaded = !!loadedSoundsRef.current[sound.path];
+        if (!alreadyLoaded) {
+            setLoadingPath(sound.path);
         }
 
         try {
-            let loadedSound = loadedSounds[sound.path];
-            if (!loadedSound) {
-                loadedSound = await preloadSound(sound);
-            }
+            const loadedSound = await preloadSound(sound);
+            if (playRequestIdRef.current !== requestId) return;
 
-            const { player, reversedPlayer, duration } = loadedSound;
-            const activePlayer = reverse ? reversedPlayer : player;
+            const { player, duration } = loadedSound;
+            const activePlayer = reverse ? ensureReversedPlayer(loadedSound) : player;
 
             activePlayer.playbackRate = speed;
             activePlayer.onstop = () => {
@@ -300,10 +359,10 @@ export function useAudio() {
             };
 
             activePlayer.start();
+            currentPlayerRef.current = activePlayer;
             setCurrentPlayer(activePlayer);
             setCurrentlyPlayingPath(sound.path);
 
-            // Initialize playback tracking
             playbackStateRef.current = {
                 soundPath: sound.path,
                 startTime: Tone.now(),
@@ -314,56 +373,17 @@ export function useAudio() {
         } catch (error) {
             console.error('Error playing sound:', error);
             throw error;
-        }
-    };
-
-    const preloadSounds = async (sounds: Sound[]): Promise<void> => {
-        if (!Array.isArray(sounds)) {
-            console.error('Invalid sounds array', sounds);
-            return;
-        }
-
-        setLoading(true);
-        setLoadedSoundsList([]);
-        let loaded = 0;
-        const errors: Error[] = [];
-        const totalSounds = sounds.filter(s => s?.type === 'sound' && s?.path).length;
-
-        try {
-            const BATCH_SIZE = 5;
-            const soundsToLoad = sounds.filter(s => s?.type === 'sound' && s?.path);
-
-            for (let i = 0; i < soundsToLoad.length; i += BATCH_SIZE) {
-                const batch = soundsToLoad.slice(i, i + BATCH_SIZE);
-
-            await Promise.all(
-                    batch.map(async (sound) => {
-                        try {
-                            await preloadSound(sound);
-                            loaded++;
-                            setLoadingProgress((loaded / totalSounds) * 100);
-                        } catch (error) {
-                            errors.push(error as Error);
-                            console.error(`Failed to preload ${sound.path}:`, error);
-                            loaded++;
-                            setLoadingProgress((loaded / totalSounds) * 100);
-                    }
-                }),
-            );
-            }
-
-            if (errors.length > 0) {
-                console.warn(`${errors.length} sounds failed to preload`);
-            }
         } finally {
-            setLoading(false);
+            if (playRequestIdRef.current === requestId) {
+                setLoadingPath(null);
+            }
         }
     };
 
-    // Stop current playback
     const stopSound = () => {
-        if (currentPlayer && currentPlayer.state === 'started') {
-            currentPlayer.stop();
+        const playing = currentPlayerRef.current;
+        if (playing && playing.state === 'started') {
+            playing.stop();
         }
         setCurrentlyPlayingPath(null);
         playbackStateRef.current = null;
@@ -372,11 +392,9 @@ export function useAudio() {
     return {
         playSound,
         stopSound,
-        preloadSounds,
-        loading,
-        loadingProgress,
+        warmSounds,
+        loadingPath,
         currentlyPlayingPath,
-        loadedSoundsList,
         speed,
         setSpeed,
         pitch,
