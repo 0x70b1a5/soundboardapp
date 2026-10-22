@@ -38,7 +38,8 @@ app.get('/api/audio/:path(*)', (req, res) => {
     const audioPath = path.join(soundboardDir, req.params.path);
     res.set('Cache-Control', 'public, max-age=31536000, immutable');
     res.sendFile(audioPath, (err) => {
-        if (err) {
+        // Client aborts (e.g. tab closed mid-preload) arrive here after headers are sent
+        if (err && !res.headersSent) {
             console.error(err);
             res.status(404).send('Audio file not found');
         }

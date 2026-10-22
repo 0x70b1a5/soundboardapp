@@ -1,34 +1,57 @@
 import { h } from 'preact';
 import { FaMinus, FaPlus } from 'react-icons/fa';
 import { useState, useEffect } from 'preact/hooks';
-import { SoundList } from './components/SoundList';
+import { SoundList, displayOrder } from './components/SoundList';
 import { Slider } from './components/Slider';
+import { WhatsNew, WHATS_NEW_VERSION } from './components/WhatsNew';
 import { useAudio } from './hooks/useAudio';
-import { SortMode, Sound } from './lib/types';
-import { generateDistinguishableColors } from './lib/colors';
+import { useBundles, FAVES_ID } from './hooks/useBundles';
+import { ButtonSize, SortMode, Sound } from './lib/types';
 import classNames from 'classnames';
 import { generateBackground } from './lib/generateBackground';
 
 export function App() {
     const [backgroundStyle, setBackgroundStyle] = useState('');
     const [sounds, setSounds] = useState<Sound[]>([]);
-    const [sortMode, setSortMode] = useState(SortMode.ALPHABETICAL);
+    const [sortMode, setSortMode] = useState(
+        () => localStorage.getItem('sound-theo_sortMode') || SortMode.ALPHABETICAL
+    );
     const [searchTerm, setSearchTerm] = useState('');
-    const [colors, setColors] = useState<string[]>([]);
     const [isDark, setIsDark] = useState(
         window.matchMedia('(prefers-color-scheme: dark)').matches
     );
-    const [faves, setFaves] = useState<Sound[]>(localStorage.getItem('sound-theo_faves') ? JSON.parse(localStorage.getItem('sound-theo_faves')!) : []);
-    const [buttonSize, setButtonSize] = useState<'xxs' | 'xs' | 'sm' | 'md' | 'lg'>('md');
+    const [buttonSize, setButtonSize] = useState<ButtonSize>(
+        () => (localStorage.getItem('sound-theo_buttonSize') as ButtonSize) || 'md'
+    );
+    const [showWhatsNew, setShowWhatsNew] = useState(
+        () => localStorage.getItem('sound-theo_whatsNewSeen') !== WHATS_NEW_VERSION
+    );
+    const {
+        bundles, activeBundle, setActiveId, toggleInActive, createBundle, renameActive, deleteActive,
+    } = useBundles();
 
     useEffect(() => {
         setBackgroundStyle(generateBackground());
     }, []);
 
+    useEffect(() => {
+        localStorage.setItem('sound-theo_buttonSize', buttonSize);
+    }, [buttonSize]);
+
+    useEffect(() => {
+        localStorage.setItem('sound-theo_sortMode', sortMode);
+    }, [sortMode]);
+
+    const dismissWhatsNew = () => {
+        localStorage.setItem('sound-theo_whatsNewSeen', WHATS_NEW_VERSION);
+        setShowWhatsNew(false);
+    };
+
     const {
-        playSound, stopSound, warmSounds, loadingPath, currentlyPlayingPath,
+        playSound, stopSound, warmSounds, loadingPath, playingPaths,
         speed, setSpeed, pitch, setPitch,
-        pitchLock, setPitchLock, reverb, setReverb, reverbWet, setReverbWet, reverse, toggleInstantReverse
+        pitchLock, setPitchLock, reverb, setReverb, reverbWet, setReverbWet, reverse, toggleInstantReverse,
+        layer, setLayer,
     } = useAudio();
 
     // Reset pitch when pitchLock is enabled
@@ -64,49 +87,75 @@ export function App() {
     const fetchSounds = async () => {
         try {
             const response = await fetch('/api/sounds');
-            const soundData = await response.json();
-
-            // Generate colors based on unique categories
-            const categories = [
-                ...new Set(soundData.map((s: Sound) => s.name.split('/')[0])),
-            ];
-            setColors(generateDistinguishableColors(categories.length, 2));
-
-            // Assign category index to each sound for coloring
-            const processedSounds = soundData.map((sound: Sound) => ({
-                ...sound,
-                categoryIndex: categories.indexOf(sound.name.split('/')[0]),
-            }));
+            const processedSounds: Sound[] = await response.json();
 
             setSounds(processedSounds);
-            const favePaths = new Set(faves.map((f) => f.path));
+            // Warm the active bundle first, then every other bundle, then the rest
+            const activePaths = new Set(activeBundle.paths);
+            const bundledPaths = new Set(bundles.flatMap((b) => b.paths));
             warmSounds([
-                ...processedSounds.filter((s: Sound) => favePaths.has(s.path)),
-                ...processedSounds.filter((s: Sound) => !favePaths.has(s.path)),
+                ...processedSounds.filter((s: Sound) => activePaths.has(s.path)),
+                ...processedSounds.filter((s: Sound) => bundledPaths.has(s.path) && !activePaths.has(s.path)),
+                ...processedSounds.filter((s: Sound) => !bundledPaths.has(s.path)),
             ]);
         } catch (error) {
             console.error('Error fetching sounds:', error);
         }
     };
 
-    const onFave = (sound: Sound) => {
-        const alreadyFaved = faves.some((s) => s.name === sound.name);
-        const next = alreadyFaved
-            ? faves.filter((s) => s.name !== sound.name)
-            : [...faves, sound];
-        setFaves(next);
-        localStorage.setItem('sound-theo_faves', JSON.stringify(next));
-        if (!alreadyFaved) {
+    const onToggleBundle = (sound: Sound) => {
+        if (toggleInActive(sound)) {
             warmSounds([sound], true);
         }
     };
 
+    const selectBundle = (id: string) => {
+        setActiveId(id);
+        const paths = new Set(bundles.find((b) => b.id === id)?.paths);
+        warmSounds(sounds.filter((s) => paths.has(s.path)), true);
+    };
+
+    const activePaths = new Set(activeBundle.paths);
+    const bundleSounds = sounds.filter((s) => activePaths.has(s.path));
+
+    // Keys 1-9 then 0 play the first ten sounds of the active bundle, in on-screen order
+    const hotkeyOrder = displayOrder(bundleSounds, sortMode).slice(0, 10);
+    const hotkeys = new Map(hotkeyOrder.map((s, i) => [s.path, String((i + 1) % 10)]));
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+            if (showWhatsNew) {
+                if (e.key === 'Escape') dismissWhatsNew();
+                return;
+            }
+
+            if (e.key === 'Escape') {
+                stopSound();
+                return;
+            }
+            if (/^[0-9]$/.test(e.key)) {
+                const sound = hotkeyOrder[(Number(e.key) + 9) % 10];
+                if (sound) {
+                    e.preventDefault();
+                    playSound(sound);
+                }
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    });
+
+    const BUTTON_SIZES: ButtonSize[] = ['xxs', 'xs', 'sm', 'md', 'lg'];
+
     const increaseButtonSize = () => {
-        setButtonSize(buttonSize === 'xxs' ? 'xs' : buttonSize === 'xs' ? 'sm' : buttonSize === 'sm' ? 'md' : buttonSize === 'md' ? 'lg' : 'xxs');
+        setButtonSize(BUTTON_SIZES[Math.min(BUTTON_SIZES.indexOf(buttonSize) + 1, BUTTON_SIZES.length - 1)]);
     }
 
     const decreaseButtonSize = () => {
-        setButtonSize(buttonSize === 'xxs' ? 'lg' : buttonSize === 'xs' ? 'xxs' : buttonSize === 'sm' ? 'xs' : buttonSize === 'md' ? 'sm' : 'md');
+        setButtonSize(BUTTON_SIZES[Math.max(BUTTON_SIZES.indexOf(buttonSize) - 1, 0)]);
     }
 
     return (
@@ -163,8 +212,8 @@ export function App() {
                     <button
                         onClick={stopSound}
                         class={classNames("text-xs px-2 py-1 rounded-full font-medium transition-colors", {
-                            "bg-red-600 text-white": currentlyPlayingPath,
-                            "bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500": !currentlyPlayingPath,
+                            "bg-red-600 text-white": playingPaths.length > 0,
+                            "bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500": playingPaths.length === 0,
                         })}
                         title="Stop playback"
                     >
@@ -179,6 +228,16 @@ export function App() {
                         title="Instant reverse (works mid-playback!)"
                     >
                         ⏪ Reverse
+                    </button>
+                    <button
+                        onClick={() => setLayer(!layer)}
+                        class={classNames("text-xs px-2 py-1 rounded-full font-medium transition-colors", {
+                            "bg-emerald-500 text-white": layer,
+                            "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500": !layer,
+                        })}
+                        title="Layer sounds on top of each other instead of cutting off"
+                    >
+                        🥞 Layer
                     </button>
                 </div>
                 {/* Speed slider */}
@@ -253,7 +312,7 @@ export function App() {
             {/* Mobile sliders - fixed full-width bottom bars */}
             <div class="md:hidden fixed bottom-0 left-0 right-0 rounded-t-2xl py-2 z-20 flex flex-col bg-gray-100/95 dark:bg-gray-800/95 backdrop-blur shadow-[0_-4px_20px_rgba(0,0,0,0.15)]">
                 {/* Effect toggles - compact row */}
-                <div class="grid grid-cols-7 gap-1 px-1 border-b border-gray-200 dark:border-gray-700">
+                <div class="grid grid-cols-8 gap-1 px-1 border-b border-gray-200 dark:border-gray-700">
                     <button
                         onClick={handlePitchLockToggle}
                         class={classNames("text-lg aspect-square self-stretch px-2 py-1 rounded-full font-medium transition-colors", {
@@ -277,8 +336,8 @@ export function App() {
                     <button
                         onClick={stopSound}
                         class={classNames("text-lg aspect-square self-stretch px-2 py-1 rounded-full font-medium transition-colors", {
-                            "bg-red-600 text-white": currentlyPlayingPath,
-                            "bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500": !currentlyPlayingPath,
+                            "bg-red-600 text-white": playingPaths.length > 0,
+                            "bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500": playingPaths.length === 0,
                         })}
                         title="Stop"
                     >
@@ -293,6 +352,16 @@ export function App() {
                         title="Instant reverse (works mid-playback!)"
                     >
                         ⏪
+                    </button>
+                    <button
+                        onClick={() => setLayer(!layer)}
+                        class={classNames("text-lg aspect-square self-stretch px-2 py-1 rounded-full font-medium transition-colors", {
+                            "bg-emerald-500 text-white": layer,
+                            "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300": !layer,
+                        })}
+                        title="Layer sounds"
+                    >
+                        🥞
                     </button>
                     <button
                         onClick={decreaseButtonSize}
@@ -409,19 +478,65 @@ export function App() {
                     onInput={(e) => setSearchTerm(e.currentTarget.value)}
                 />
 
-                {faves?.length > 0 ? <>
-                    <SoundList
-                        className="mb-1"
-                        buttonSize={buttonSize}
-                        sounds={faves}
-                        sortMode={sortMode}
-                        onPlay={playSound}
-                        currentlyPlayingPath={currentlyPlayingPath}
-                        loadingPath={loadingPath}
-                        darkMode={isDark}
-                        onFave={onFave}
-                    />
-                </> : <p class="m-0 text-center text-lg opacity-50">long press to favorite</p>}
+                {/* Bundle tabs */}
+                <div class="self-stretch flex items-center gap-1 px-4 overflow-x-auto">
+                    {bundles.map((bundle) => (
+                        <button
+                            key={bundle.id}
+                            onClick={() => selectBundle(bundle.id)}
+                            class={classNames("btn shrink-0 text-sm font-medium px-3 py-1 rounded-full transition-colors", {
+                                "bg-fuchsia-500 !text-white": bundle.id === activeBundle.id,
+                                "bg-gray-200 dark:bg-gray-700 text-gray-700": bundle.id !== activeBundle.id,
+                            })}
+                        >
+                            {bundle.id === FAVES_ID ? '★ ' : ''}{bundle.name}
+                            <span class="ml-1 opacity-60">{bundle.paths.length}</span>
+                        </button>
+                    ))}
+                    <button
+                        onClick={createBundle}
+                        class="btn shrink-0 text-sm px-3 py-1 rounded-full !border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-600"
+                        title="New bundle"
+                    >
+                        + New
+                    </button>
+                    <div class="grow" />
+                    <button
+                        onClick={renameActive}
+                        class="btn shrink-0 text-sm px-2 py-1 opacity-60"
+                        title="Rename bundle"
+                    >
+                        ✏️
+                    </button>
+                    {activeBundle.id !== FAVES_ID && (
+                        <button
+                            onClick={deleteActive}
+                            class="btn shrink-0 text-sm px-2 py-1 opacity-60"
+                            title="Delete bundle"
+                        >
+                            🗑
+                        </button>
+                    )}
+                </div>
+
+                {bundleSounds.length > 0 ? (
+                    <div class="self-stretch max-h-[40vh] overflow-y-auto">
+                        <SoundList
+                            className="mb-1"
+                            buttonSize={buttonSize}
+                            sounds={bundleSounds}
+                            sortMode={sortMode}
+                            onPlay={playSound}
+                            playingPaths={playingPaths}
+                            loadingPath={loadingPath}
+                            darkMode={isDark}
+                            onFave={onToggleBundle}
+                            hotkeys={hotkeys}
+                        />
+                    </div>
+                ) : (
+                    <p class="m-0 text-center text-lg opacity-50">long press a sound to add it to {activeBundle.name}</p>
+                )}
             </div>
 
             <SoundList
@@ -431,11 +546,13 @@ export function App() {
                 )}
                 sortMode={sortMode}
                 onPlay={playSound}
-                currentlyPlayingPath={currentlyPlayingPath}
+                playingPaths={playingPaths}
                 loadingPath={loadingPath}
                 darkMode={isDark}
-                onFave={onFave}
+                onFave={onToggleBundle}
+                bundledPaths={activePaths}
             />
+            {showWhatsNew && <WhatsNew onClose={dismissWhatsNew} />}
             {/* Bottom padding to prevent mobile sliders from occluding content */}
             <div class="h-36 md:h-28" />
         </div>

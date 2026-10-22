@@ -4,9 +4,8 @@
 ![Tone.js](https://img.shields.io/badge/Tone.js-15.x-F734D7)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)
 ![Vite](https://img.shields.io/badge/Vite-7.x-646CFF?logo=vite)
-![Sounds](https://img.shields.io/badge/sounds-211-orange)
 
-A full-stack web soundboard with real-time pitch shifting, speed control, reverb, and instant mid-playback audio reversal. 211 sounds across 15 categories, all manipulable on the fly.
+A full-stack web soundboard with real-time pitch shifting, speed control, reverb, and instant mid-playback audio reversal. Every sound is manipulable on the fly.
 
 ## Features
 
@@ -15,32 +14,34 @@ A full-stack web soundboard with real-time pitch shifting, speed control, reverb
 - **Pitch Shifting** - -12 to +12 semitones, independent of speed
 - **Vinyl Mode** - Lock pitch to speed for authentic record-player effects, with automatic pitch compensation via `pitch + (-12 * log2(speed))`
 - **Reverb** - Adjustable wet/dry room reverb routed through Tone.js effect chain
-- **Instant Reverse** - Flip playback direction mid-sound without interruption, using dual-buffer architecture (forward + reversed clones) with real-time offset calculation
+- **Instant Reverse** - Flip playback direction mid-sound without interruption, using dual buffers (forward + reversed copy) with real-time offset calculation
+- **Layering** - Optionally stack sounds on top of each other instead of cutting the previous one off
 
 ### Sound Library
-- **211 sounds** organized into **15 categories** - strings, mechanical-metal, splats, horns, nature, slides, and more
+- Sounds organized into categories by folder - strings, mechanical-metal, splats, horns, nature, slides, and more
 - **Alphabetical or Category sorting** with auto-generated HSV color coding for visual distinction
 - **Real-time search** across all sound names
-- **Favorites** - Long-press any sound to favorite it; persisted in localStorage and pinned in a sticky header for instant access
+- **Bundles** - Named sets of sounds (e.g. "Cannon fight") pinned in a sticky header. Pick a bundle tab, then long-press any sound to add or remove it. Persisted in localStorage
+- **Hotkeys** - Keys 1-9 and 0 play the first ten sounds of the active bundle; Esc stops everything
 
 ### Responsive Interface
 - **Desktop** - Floating control panels anchored to screen corners with full slider controls
 - **Mobile** - Compact bottom bar with icon-driven controls and haptic feedback on long-press
 - **Dark mode** with system preference detection
-- **Five button sizes** (xxs through lg) for density preference
+- **Five button sizes** (xxs through lg) for density preference, remembered between visits
 - **Procedurally generated backgrounds** - unique CSS gradient compositions on every load
 
 ### Performance
-- **Batched preloading** - Sounds load in groups of 5 with a visual progress bar
-- **Retry with exponential backoff** - Failed loads retry up to 3 times
-- **Lazy UI feedback** - Not-yet-loaded sounds are visually greyed out with a wait cursor
+- **Idle-time preloading** - Sounds warm in the background, active bundle first
+- **Retry with backoff** - Failed loads retry up to 3 times
+- **Lazy UI feedback** - A sound tapped before it has loaded pulses until it plays
 
 ## Architecture
 
 ```
 Frontend (Preact + Vite)          Backend (Express)
 ┌───────────────────────┐         ┌───────────────────┐
-│  App.tsx              │         │  app.ts           │
+│  App.tsx              │         │  app.cjs          │
 │  ├─ useAudio hook     │  ◄────► │  /api/sounds      │
 │  │  └─ Tone.js        │  proxy  │  /api/audio/:path │
 │  │     Player → Pitch │         └───────────────────┘
@@ -48,12 +49,12 @@ Frontend (Preact + Vite)          Backend (Express)
 │  │     → Destination  │         Recursive file read
 │  ├─ SoundButton       │         of audio directory
 │  ├─ SoundList         │
-│  ├─ Slider (custom)   │
-│  └─ LoadingBar        │
+│  ├─ useBundles hook   │
+│  └─ Slider (custom)   │
 └───────────────────────┘
 ```
 
-The `useAudio` hook manages the entire audio lifecycle: preloading buffers, maintaining dual players per sound (forward and reversed clones), routing through a `Player → PitchShift → Reverb → Destination` effect chain, and tracking playback state via refs for seamless mid-playback manipulation.
+The `useAudio` hook manages the entire audio lifecycle: preloading buffers (forward, plus a reversed copy on demand), spawning a short-lived player per playback so sounds can layer, routing through a `Player → PitchShift → Reverb → Destination` effect chain, and tracking playback state via refs for seamless mid-playback manipulation.
 
 ## Setup
 

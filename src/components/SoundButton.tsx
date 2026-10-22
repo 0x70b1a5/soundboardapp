@@ -1,7 +1,7 @@
 import classNames from 'classnames';
 import { h } from 'preact';
 import { useRef, useCallback } from 'preact/hooks';
-import { Sound } from '../lib/types';
+import { ButtonSize, Sound } from '../lib/types';
 
 const LONG_PRESS_DURATION = 500; // ms
 
@@ -10,6 +10,8 @@ export const SoundButton = ({
     color,
     isPlaying = false,
     isLoading = false,
+    inBundle = false,
+    hotkey,
     onPlay,
     onFave,
     buttonSize = 'md',
@@ -19,9 +21,11 @@ export const SoundButton = ({
     color: string;
     isPlaying: boolean;
     isLoading?: boolean;
+    inBundle?: boolean;
+    hotkey?: string;
     onPlay: (sound: Sound) => void;
     onFave: (sound: Sound) => void;
-    buttonSize?: 'xxs' | 'xs' | 'sm' | 'md' | 'lg';
+    buttonSize?: ButtonSize;
     darkMode?: boolean;
 }) => {
     const longPressTimer = useRef<number | null>(null);
@@ -68,6 +72,7 @@ export const SoundButton = ({
                 'px-8 py-4 rounded-full text-xl': buttonSize === 'lg',
                 'filter invert': isPlaying,
                 'opacity-60 cursor-wait animate-pulse': isLoading,
+                'outline outline-3 outline-offset-2 outline-fuchsia-500': inBundle,
             })}
             style={{ backgroundColor: color }}
             onClick={handleClick}
@@ -81,6 +86,9 @@ export const SoundButton = ({
             data-sound={sound.name}
             data-path={sound.path}
         >
+            {hotkey && (
+                <kbd class="mr-1.5 px-1 rounded bg-black/25 font-mono text-[0.8em]">{hotkey}</kbd>
+            )}
             {displayName}
         </button>
     );

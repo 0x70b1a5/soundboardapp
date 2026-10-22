@@ -6,7 +6,7 @@
         "dev": "vite",
         "build": "vite build",
         "preview": "vite preview",
-        "server": "node --loader ts-node/esm app.ts"
+        "server": "node app.cjs"
     },
     "dependencies": {
         "classnames": "^2.5.1",

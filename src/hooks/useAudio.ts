@@ -4,10 +4,11 @@ import { Sound } from '../lib/types';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
+const LAYER_KEY = 'sound-theo_layer';
 
 interface LoadedSound {
-    player: Tone.Player;
-    reversedPlayer: Tone.Player | null;
+    buffer: Tone.ToneAudioBuffer;
+    reversedBuffer: Tone.ToneAudioBuffer | null;
     sound: Sound;
     duration: number;
 }
@@ -32,8 +33,7 @@ const waitForIdle = () =>
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function useAudio() {
-    const [currentPlayer, setCurrentPlayer] = useState<Tone.Player | null>(null);
-    const [currentlyPlayingPath, setCurrentlyPlayingPath] = useState<string | null>(null);
+    const [playingPaths, setPlayingPaths] = useState<string[]>([]);
     const [loadingPath, setLoadingPath] = useState<string | null>(null);
 
     const [speed, setSpeed] = useState<number>(1.0);
@@ -43,22 +43,22 @@ export function useAudio() {
     const [reverb, setReverb] = useState<boolean>(false);
     const [reverbWet, setReverbWet] = useState<number>(0.4);
     const [reverse, setReverse] = useState<boolean>(false);
+    const [layer, setLayer] = useState<boolean>(() => localStorage.getItem(LAYER_KEY) === '1');
 
     const pitchShiftRef = useRef<Tone.PitchShift | null>(null);
     const reverbRef = useRef<Tone.Reverb | null>(null);
 
+    // The most recently started player; speed tracking and instant reverse act on this one
     const playbackStateRef = useRef<PlaybackState | null>(null);
+    const currentPlayerRef = useRef<Tone.Player | null>(null);
+    // Every player currently sounding (more than one when layering), mapped to its sound path
+    const activePlayersRef = useRef<Map<Tone.Player, string>>(new Map());
     const loadedSoundsRef = useRef<Record<string, LoadedSound>>({});
     const inflightRef = useRef<Map<string, Promise<LoadedSound>>>(new Map());
-    const currentPlayerRef = useRef<Tone.Player | null>(null);
     const playRequestIdRef = useRef(0);
     const warmupQueueRef = useRef<Sound[]>([]);
     const warmupRunningRef = useRef(false);
     const warmupCancelledRef = useRef(false);
-
-    useEffect(() => {
-        currentPlayerRef.current = currentPlayer;
-    }, [currentPlayer]);
 
     useEffect(() => {
         reverbRef.current = new Tone.Reverb({
@@ -78,6 +78,10 @@ export function useAudio() {
             reverbRef.current?.dispose();
         };
     }, []);
+
+    useEffect(() => {
+        localStorage.setItem(LAYER_KEY, layer ? '1' : '0');
+    }, [layer]);
 
     useEffect(() => {
         if (!pitchShiftRef.current || !reverbRef.current) return;
@@ -107,42 +111,39 @@ export function useAudio() {
     }, [pitch, speed, pitchLock]);
 
     useEffect(() => {
-        if (currentPlayer && currentPlayer.state === 'started') {
-            currentPlayer.playbackRate = speed;
-            if (playbackStateRef.current) {
-                const now = Tone.now();
-                const elapsed = now - playbackStateRef.current.startTime;
-                const positionDelta = elapsed * playbackStateRef.current.speed;
-                const newPosition = playbackStateRef.current.isReversed
-                    ? playbackStateRef.current.startPosition - positionDelta
-                    : playbackStateRef.current.startPosition + positionDelta;
+        activePlayersRef.current.forEach((_, player) => {
+            player.playbackRate = speed;
+        });
+        if (playbackStateRef.current) {
+            const now = Tone.now();
+            const elapsed = now - playbackStateRef.current.startTime;
+            const positionDelta = elapsed * playbackStateRef.current.speed;
+            const newPosition = playbackStateRef.current.isReversed
+                ? playbackStateRef.current.startPosition - positionDelta
+                : playbackStateRef.current.startPosition + positionDelta;
 
-                playbackStateRef.current = {
-                    ...playbackStateRef.current,
-                    startTime: now,
-                    startPosition: newPosition,
-                    speed: speed,
-                };
-            }
+            playbackStateRef.current = {
+                ...playbackStateRef.current,
+                startTime: now,
+                startPosition: newPosition,
+                speed: speed,
+            };
         }
-    }, [speed, currentPlayer]);
+    }, [speed]);
 
-    const connectPlayer = (player: Tone.Player) => {
-        if (pitchShiftRef.current) {
-            player.connect(pitchShiftRef.current);
-        } else {
-            player.toDestination();
-        }
+    const syncPlayingPaths = () => {
+        setPlayingPaths([...new Set(activePlayersRef.current.values())]);
     };
 
-    const ensureReversedPlayer = (loaded: LoadedSound): Tone.Player => {
-        if (loaded.reversedPlayer) return loaded.reversedPlayer;
+    const ensureReversedBuffer = (loaded: LoadedSound): Tone.ToneAudioBuffer => {
+        if (loaded.reversedBuffer) return loaded.reversedBuffer;
 
-        const originalBuffer = loaded.player.buffer.get();
+        const originalBuffer = loaded.buffer.get();
         if (!originalBuffer) {
             throw new Error('Failed to get audio buffer');
         }
 
+        // Reversing a ToneAudioBuffer happens in place, so copy first
         const reversedAudioBuffer = new AudioBuffer({
             numberOfChannels: originalBuffer.numberOfChannels,
             length: originalBuffer.length,
@@ -153,11 +154,50 @@ export function useAudio() {
             reversedAudioBuffer.copyToChannel(originalBuffer.getChannelData(channel), channel);
         }
 
-        const reversedPlayer = new Tone.Player(reversedAudioBuffer);
-        reversedPlayer.reverse = true;
-        connectPlayer(reversedPlayer);
-        loaded.reversedPlayer = reversedPlayer;
-        return reversedPlayer;
+        const reversedBuffer = new Tone.ToneAudioBuffer(reversedAudioBuffer);
+        reversedBuffer.reverse = true;
+        loaded.reversedBuffer = reversedBuffer;
+        return reversedBuffer;
+    };
+
+    // A Tone.Player restarts rather than overlaps when started twice, so every
+    // playback gets its own throwaway player sharing the cached buffer.
+    const startPlayer = (loaded: LoadedSound, reversed: boolean, offset?: number) => {
+        const player = new Tone.Player(reversed ? ensureReversedBuffer(loaded) : loaded.buffer);
+        if (pitchShiftRef.current) {
+            player.connect(pitchShiftRef.current);
+        } else {
+            player.toDestination();
+        }
+        player.playbackRate = speed;
+        player.onstop = () => {
+            activePlayersRef.current.delete(player);
+            if (currentPlayerRef.current === player) {
+                currentPlayerRef.current = null;
+                playbackStateRef.current = null;
+            }
+            syncPlayingPaths();
+            // Tone still touches the player after onstop returns
+            setTimeout(() => player.dispose(), 0);
+        };
+
+        player.start(undefined, offset);
+        activePlayersRef.current.set(player, loaded.sound.path);
+        currentPlayerRef.current = player;
+        syncPlayingPaths();
+        return player;
+    };
+
+    const stopAll = () => {
+        activePlayersRef.current.forEach((_, player) => {
+            if (player.state === 'started') {
+                player.stop();
+            }
+        });
+        activePlayersRef.current.clear();
+        currentPlayerRef.current = null;
+        playbackStateRef.current = null;
+        syncPlayingPaths();
     };
 
     const preloadSound = async (sound: Sound): Promise<LoadedSound> => {
@@ -174,15 +214,14 @@ export function useAudio() {
         const loadPromise = (async (): Promise<LoadedSound> => {
             for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
                 try {
-                    const player = new Tone.Player();
-                    await player.load(`/api/audio${sound.path}`);
-                    connectPlayer(player);
+                    const buffer = new Tone.ToneAudioBuffer();
+                    await buffer.load(`/api/audio${sound.path}`);
 
                     const loadedSound: LoadedSound = {
-                        player,
-                        reversedPlayer: null,
+                        buffer,
+                        reversedBuffer: null,
                         sound,
-                        duration: player.buffer.duration,
+                        duration: buffer.duration,
                     };
                     loadedSoundsRef.current[sound.path] = loadedSound;
                     return loadedSound;
@@ -274,6 +313,7 @@ export function useAudio() {
 
     const toggleInstantReverse = () => {
         const state = playbackStateRef.current;
+        const currentPlayer = currentPlayerRef.current;
         if (!state || !currentPlayer || currentPlayer.state !== 'started') {
             setReverse(!reverse);
             return;
@@ -285,33 +325,25 @@ export function useAudio() {
         const currentPos = getCurrentPosition();
         if (currentPos === null) return;
 
-        let reversedPlayer: Tone.Player;
         try {
-            reversedPlayer = ensureReversedPlayer(loaded);
+            ensureReversedBuffer(loaded);
         } catch (error) {
             console.error('Failed to build reversed buffer', error);
             return;
         }
 
-        const { duration, player } = loaded;
+        const { duration } = loaded;
         const newIsReversed = !state.isReversed;
 
-        currentPlayer.onstop = () => {};
+        // Retire the old player without letting its onstop clear the new playback state
+        activePlayersRef.current.delete(currentPlayer);
+        currentPlayerRef.current = null;
         currentPlayer.stop();
 
-        const newPlayer = newIsReversed ? reversedPlayer : player;
         let offset = newIsReversed ? duration - currentPos : currentPos;
         offset = Math.max(0.001, Math.min(duration - 0.001, offset));
 
-        newPlayer.playbackRate = speed;
-        newPlayer.onstop = () => {
-            setCurrentlyPlayingPath(null);
-            playbackStateRef.current = null;
-        };
-
-        newPlayer.start(undefined, offset);
-        currentPlayerRef.current = newPlayer;
-        setCurrentPlayer(newPlayer);
+        startPlayer(loaded, newIsReversed, offset);
         setReverse(newIsReversed);
 
         playbackStateRef.current = {
@@ -335,9 +367,8 @@ export function useAudio() {
             await Tone.start();
         }
 
-        const playing = currentPlayerRef.current;
-        if (playing && playing.state === 'started') {
-            playing.stop();
+        if (!layer) {
+            stopAll();
         }
 
         const alreadyLoaded = !!loadedSoundsRef.current[sound.path];
@@ -347,26 +378,15 @@ export function useAudio() {
 
         try {
             const loadedSound = await preloadSound(sound);
-            if (playRequestIdRef.current !== requestId) return;
+            // When layering, a slow load still plays; otherwise only the latest tap wins
+            if (!layer && playRequestIdRef.current !== requestId) return;
 
-            const { player, duration } = loadedSound;
-            const activePlayer = reverse ? ensureReversedPlayer(loadedSound) : player;
-
-            activePlayer.playbackRate = speed;
-            activePlayer.onstop = () => {
-                setCurrentlyPlayingPath(null);
-                playbackStateRef.current = null;
-            };
-
-            activePlayer.start();
-            currentPlayerRef.current = activePlayer;
-            setCurrentPlayer(activePlayer);
-            setCurrentlyPlayingPath(sound.path);
+            startPlayer(loadedSound, reverse);
 
             playbackStateRef.current = {
                 soundPath: sound.path,
                 startTime: Tone.now(),
-                startPosition: reverse ? duration : 0,
+                startPosition: reverse ? loadedSound.duration : 0,
                 isReversed: reverse,
                 speed: speed,
             };
@@ -380,21 +400,12 @@ export function useAudio() {
         }
     };
 
-    const stopSound = () => {
-        const playing = currentPlayerRef.current;
-        if (playing && playing.state === 'started') {
-            playing.stop();
-        }
-        setCurrentlyPlayingPath(null);
-        playbackStateRef.current = null;
-    };
-
     return {
         playSound,
-        stopSound,
+        stopSound: stopAll,
         warmSounds,
         loadingPath,
-        currentlyPlayingPath,
+        playingPaths,
         speed,
         setSpeed,
         pitch,
@@ -407,5 +418,7 @@ export function useAudio() {
         setReverbWet,
         reverse,
         toggleInstantReverse,
+        layer,
+        setLayer,
     };
 }
