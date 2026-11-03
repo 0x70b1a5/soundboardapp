@@ -1,9 +1,14 @@
 import { h } from 'preact';
 
 // Bump this when adding entries so returning visitors see the popup again
-export const WHATS_NEW_VERSION = '2026-10-bundles';
+export const WHATS_NEW_VERSION = '2026-11-random';
 
 const ITEMS = [
+    {
+        icon: '🎲',
+        title: 'Random',
+        body: 'Hit 🎲 Random (or press R) to play a surprise sound. It picks from whatever your search is showing.',
+    },
     {
         icon: '📦',
         title: 'Bundles',

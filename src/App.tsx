@@ -115,6 +115,22 @@ export function App() {
         warmSounds(sounds.filter((s) => paths.has(s.path)), true);
     };
 
+    const visibleSounds = sounds.filter(s =>
+        s.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    // Play a random sound from whatever the search is showing, avoiding an immediate repeat
+    const [lastRandomPath, setLastRandomPath] = useState<string | null>(null);
+    const playRandom = () => {
+        const pool = visibleSounds.length > 1
+            ? visibleSounds.filter((s) => s.path !== lastRandomPath)
+            : visibleSounds;
+        if (pool.length === 0) return;
+        const sound = pool[Math.floor(Math.random() * pool.length)];
+        setLastRandomPath(sound.path);
+        playSound(sound);
+    };
+
     const activePaths = new Set(activeBundle.paths);
     const bundleSounds = sounds.filter((s) => activePaths.has(s.path));
 
@@ -134,6 +150,11 @@ export function App() {
 
             if (e.key === 'Escape') {
                 stopSound();
+                return;
+            }
+            if (e.key === 'r' || e.key === 'R') {
+                e.preventDefault();
+                playRandom();
                 return;
             }
             if (/^[0-9]$/.test(e.key)) {
@@ -218,6 +239,13 @@ export function App() {
                         title="Stop playback"
                     >
                         ⏹ Stop
+                    </button>
+                    <button
+                        onClick={playRandom}
+                        class="text-xs px-2 py-1 rounded-full font-medium transition-colors bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500"
+                        title="Play a random sound (R)"
+                    >
+                        🎲 Random
                     </button>
                     <button
                         onClick={toggleInstantReverse}
@@ -312,7 +340,7 @@ export function App() {
             {/* Mobile sliders - fixed full-width bottom bars */}
             <div class="md:hidden fixed bottom-0 left-0 right-0 rounded-t-2xl py-2 z-20 flex flex-col bg-gray-100/95 dark:bg-gray-800/95 backdrop-blur shadow-[0_-4px_20px_rgba(0,0,0,0.15)]">
                 {/* Effect toggles - compact row */}
-                <div class="grid grid-cols-8 gap-1 px-1 border-b border-gray-200 dark:border-gray-700">
+                <div class="grid grid-cols-9 gap-1 px-1 border-b border-gray-200 dark:border-gray-700">
                     <button
                         onClick={handlePitchLockToggle}
                         class={classNames("text-lg aspect-square self-stretch px-2 py-1 rounded-full font-medium transition-colors", {
@@ -342,6 +370,13 @@ export function App() {
                         title="Stop"
                     >
                         ⏹
+                    </button>
+                    <button
+                        onClick={playRandom}
+                        class="text-lg aspect-square self-stretch px-2 py-1 rounded-full font-medium transition-colors bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300"
+                        title="Random sound"
+                    >
+                        🎲
                     </button>
                     <button
                         onClick={toggleInstantReverse}
@@ -541,9 +576,7 @@ export function App() {
 
             <SoundList
                 buttonSize={buttonSize}
-                sounds={sounds.filter(s =>
-                    s.name.toLowerCase().includes(searchTerm.toLowerCase())
-                )}
+                sounds={visibleSounds}
                 sortMode={sortMode}
                 onPlay={playSound}
                 playingPaths={playingPaths}
